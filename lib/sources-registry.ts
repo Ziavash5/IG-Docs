@@ -46,6 +46,12 @@ export const SOURCE_REGISTRY: Source[] = [
     crawl: { prefix: "https://www.bzst.de/EN", max: 15 } },
   { id: "de-handelsregister", body: "Handelsregister (DE) — Company register", corridor: "dach",
     url: "https://www.handelsregister.de/rp_web/welcome.xhtml" },
+  { id: "de-astg", body: "Außensteuergesetz (DE) — German CFC rules (full text)", corridor: "dach",
+    url: "https://www.gesetze-im-internet.de/astg/",
+    crawl: { prefix: "https://www.gesetze-im-internet.de/astg/", max: 25 } },
+  { id: "de-estg-kstg", body: "Körperschaftsteuergesetz (DE) — German corporate tax (full text)", corridor: "dach",
+    url: "https://www.gesetze-im-internet.de/kstg_1977/",
+    crawl: { prefix: "https://www.gesetze-im-internet.de/kstg_1977/", max: 25 } },
 ];
 
 /** Candidate sources for a corridor: base layer + that corridor's overlay. */

@@ -141,6 +141,41 @@ export async function assessCurriculum(
   return textOf(msg).trim();
 }
 
+export interface ValueReport {
+  score: number; // 1–5
+  text: string;
+}
+
+/** Assess a generated unit for specificity, source-grounding, and real usefulness. */
+export async function assessUnitValue(
+  question: string,
+  body: string,
+  citations: string[],
+): Promise<ValueReport> {
+  const msg = await anthropic().messages.create({
+    model: MODEL,
+    max_tokens: 1200,
+    thinking: { type: "adaptive" },
+    system:
+      "You assess whether a knowledge-hub answer is genuinely valuable to a foreign company " +
+      "entering Canada. Score 1–5 on: specificity (real thresholds, sections, forms, numbers " +
+      "vs vague generalities), grounding (claims tied to the cited official sources), and " +
+      "usefulness (hard-to-find, decision-useful content vs generic blog filler). Penalise " +
+      "hedging, padding, and anything unsupported. Be blunt and concrete. Respond with a " +
+      "single JSON object: {\"score\": <1-5>, \"findings\": \"- point\\n- point\"}.",
+    messages: [
+      {
+        role: "user",
+        content:
+          `Question: ${question}\nCited sources: ${citations.join(", ") || "(none)"}\n\n` +
+          `Answer:\n${body || "(empty)"}`,
+      },
+    ],
+  });
+  const parsed = parseJson<{ score: number; findings: string }>(textOf(msg));
+  return { score: Number(parsed.score) || 0, text: parsed.findings ?? "" };
+}
+
 export interface SuggestedTopic {
   title: string;
   question: string;

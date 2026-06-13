@@ -24,6 +24,7 @@ import {
   suggestTopics,
   autoOrderSlugs,
   assessCurriculum,
+  assessUnitValue,
   type SuggestedTopic,
 } from "@/lib/curriculum";
 import type { Corridor, RiskTier } from "@/lib/question-unit";
@@ -335,6 +336,20 @@ export async function aiAssist(
     return { ok: true, text: textOf(msg).trim() };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** AI value assessment of a generated unit (specificity, grounding, usefulness). */
+export async function assessUnit(
+  slug: string,
+): Promise<{ ok: boolean; score?: number; text?: string; message?: string }> {
+  try {
+    const unit = await getUnitContent(slug);
+    if (!unit) return { ok: false, message: "Unit not found." };
+    const r = await assessUnitValue(unit.question, unit.body ?? "", unit.citations);
+    return { ok: true, score: r.score, text: r.text };
+  } catch (e) {
+    return { ok: false, message: errMsg(e) };
   }
 }
 

@@ -2,7 +2,7 @@ import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { SOURCE_REGISTRY } from "@/lib/sources-registry";
 import { openQueue, ingestStats, sourceChunkCounts, type QueueRow } from "@/lib/db";
 import { approveUnit, ingestOne, ingestEverything, seedCurriculum } from "./actions";
-import { ActionButton } from "./buttons";
+import { ActionButton, AssessButton } from "./buttons";
 import { PillarEditor } from "./curriculum";
 
 export const dynamic = "force-dynamic";
@@ -149,6 +149,9 @@ export default async function Admin() {
           <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
             <ActionButton action={approveUnit.bind(null, row.unitId)} idleLabel="Approve & publish" busyLabel="Publishing…" variant="primary" />
             <a className="ghost-btn" href={`/admin/edit/${row.slug}`}>Edit content</a>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <AssessButton slug={row.slug} />
           </div>
         </div>
       ))}

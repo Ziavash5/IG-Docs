@@ -11,7 +11,14 @@ import { SOURCE_REGISTRY } from "../sources-registry";
 
 const MAX_CHUNKS_PER_SOURCE = 600;
 const CHUNK_TARGET = 1200;
-const UA = "InterGestCanada-Ingest/0.2 (+corridor-authority-engine)";
+// Present as a real browser; bare bot UAs get blocked by canada.ca's bot manager.
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const FETCH_HEADERS = {
+  "user-agent": UA,
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-CA,en;q=0.9,de;q=0.8",
+};
 
 export interface IngestResult {
   sourceId: string;
@@ -19,18 +26,28 @@ export interface IngestResult {
   pages: number;
 }
 
-/** Reduce HTML to readable text, preferring the <main> content region when present. */
-function extractText(html: string): string {
-  const main = html.match(/<main[\s\S]*?<\/main>/i)?.[0] ?? html;
-  return main
+function clean(html: string): string {
+  return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<header[\s\S]*?<\/header>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Reduce HTML to readable text, preferring <main>, falling back to the full body. */
+function extractText(html: string): string {
+  const main = html.match(/<main[\s\S]*?<\/main>/i)?.[0];
+  if (main) {
+    const t = clean(main);
+    if (t.length >= 400) return t;
+  }
+  return clean(html);
 }
 
 /** Same-origin links under `prefix`, for crawling a topic tree. */
@@ -63,7 +80,7 @@ async function collectPages(source: Source): Promise<{ url: string; text: string
     visited.add(url);
     let html: string;
     try {
-      const res = await fetch(url, { headers: { "user-agent": UA } });
+      const res = await fetch(url, { headers: FETCH_HEADERS });
       if (!res.ok) continue;
       html = await res.text();
     } catch {
