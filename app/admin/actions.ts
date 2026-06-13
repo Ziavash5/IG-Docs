@@ -23,6 +23,8 @@ import {
   insertChunks,
   clearSourceData,
   queueCounts,
+  allQueueCounts,
+  sourceChunkCounts,
   seedIngestQueue,
   nextPending,
   markQueueDone,
@@ -218,6 +220,23 @@ export async function ingestSourceStep(sourceId: string): Promise<StepResult> {
     return { ok: true, done: r.complete, message: `${sourceId}: +${r.added} passages${r.complete ? " (done)" : ""}` };
   } catch (e) {
     return { ok: false, done: true, message: errMsg(e) };
+  }
+}
+
+export type SourceStatus = { id: string; passages: number; pending: number; done: number };
+
+/** Live per-source ingestion status for the console (polled by the client). */
+export async function corpusStatus(): Promise<SourceStatus[]> {
+  try {
+    const [counts, q, sources] = await Promise.all([sourceChunkCounts(), allQueueCounts(), allSources()]);
+    return sources.map((s) => ({
+      id: s.id,
+      passages: counts[s.id] ?? 0,
+      pending: q[s.id]?.pending ?? 0,
+      done: q[s.id]?.done ?? 0,
+    }));
+  } catch {
+    return [];
   }
 }
 

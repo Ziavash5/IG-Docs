@@ -52,6 +52,17 @@ function extractText(html: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** fetch with a hard timeout so a slow/hanging page can't stall the whole step. */
+async function timedFetch(url: string, headers: Record<string, string>, ms = 25000): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { headers, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /** Absolute links found in raw HTML. */
 function htmlLinks(html: string, baseUrl: string): string[] {
   const out = new Set<string>();
@@ -79,7 +90,7 @@ function markdownLinks(md: string): string[] {
 /** Fast path: a direct browser-like fetch. Returns null if blocked or thin. */
 async function fetchDirect(url: string): Promise<{ text: string; links: string[] } | null> {
   try {
-    const res = await fetch(url, { headers: FETCH_HEADERS });
+    const res = await timedFetch(url, FETCH_HEADERS);
     if (!res.ok) return null;
     const html = await res.text();
     const text = extractText(html);
@@ -105,7 +116,7 @@ async function fetchReader(
   };
   if (key) headers.authorization = `Bearer ${key}`;
   try {
-    const res = await fetch(`https://r.jina.ai/${url}`, { headers });
+    const res = await timedFetch(`https://r.jina.ai/${url}`, headers, 30000);
     if (res.status === 429 && attempt < 4) {
       await sleep(2 ** attempt * 3000);
       return fetchReader(url, attempt + 1);

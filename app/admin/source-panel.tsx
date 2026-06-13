@@ -1,18 +1,41 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ingestAllStep, ingestSourceStep, clearSource, removeSource } from "./actions";
+import {
+  ingestAllStep,
+  ingestSourceStep,
+  clearSource,
+  removeSource,
+  corpusStatus,
+  type SourceStatus,
+} from "./actions";
 
 type Step = { ok: boolean; done: boolean; message: string };
-type S = { id: string; body: string; passages: number; custom: boolean };
+type S = { id: string; body: string; custom: boolean };
 
 export function SourcePanel({ sources }: { sources: S[] }) {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState("");
+  const [status, setStatus] = useState<Record<string, SourceStatus>>({});
   const stop = useRef(false);
   const router = useRouter();
+
+  const refresh = useCallback(async () => {
+    const rows = await corpusStatus();
+    setStatus(Object.fromEntries(rows.map((r) => [r.id, r])));
+  }, []);
+
+  // Initial load, plus a poll while running so progress updates without a refresh.
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(refresh, 2500);
+    return () => clearInterval(t);
+  }, [running, refresh]);
 
   const toggle = (id: string) =>
     setSel((p) => {
@@ -22,11 +45,16 @@ export function SourcePanel({ sources }: { sources: S[] }) {
     });
 
   const loop = async (step: () => Promise<Step>) => {
-    let i = 0;
     while (!stop.current) {
-      const r = await step();
+      let r: Step;
+      try {
+        r = await step();
+      } catch {
+        setMsg("A step stopped early (timeout). Use Continue unfinished to resume — nothing is lost.");
+        break;
+      }
       setMsg(r.message);
-      if (++i % 3 === 0) router.refresh();
+      await refresh();
       if (r.done || !r.ok) break;
       await new Promise((res) => setTimeout(res, 300));
     }
@@ -39,18 +67,14 @@ export function SourcePanel({ sources }: { sources: S[] }) {
       await fn();
     } finally {
       setRunning(false);
+      await refresh();
       router.refresh();
     }
   };
 
-  const ingestAll = drive(() => loop(() => ingestAllStep(false)));
-  const continueUnfinished = drive(() => loop(() => ingestAllStep(true)));
-  const ingestSelected = drive(async () => {
-    for (const id of sel) {
-      if (stop.current) break;
-      await loop(() => ingestSourceStep(id));
-    }
-  });
+  const list = sources.map((s) => ({ ...s, st: status[s.id] }));
+  const complete = list.filter((s) => s.st && s.st.pending === 0 && s.st.passages > 0).length;
+  const pendingPages = list.reduce((a, s) => a + (s.st?.pending ?? 0), 0);
 
   return (
     <div>
@@ -59,43 +83,55 @@ export function SourcePanel({ sources }: { sources: S[] }) {
           <button type="button" className="ghost-btn" onClick={() => (stop.current = true)}>Stop</button>
         ) : (
           <>
-            <button type="button" className="book-call-btn" onClick={ingestAll}>Ingest all (queued)</button>
-            <button type="button" className="ghost-btn" onClick={continueUnfinished}>Continue unfinished</button>
-            <button type="button" className="ghost-btn" disabled={sel.size === 0} onClick={ingestSelected}>
-              Ingest selected ({sel.size})
-            </button>
+            <button type="button" className="book-call-btn" onClick={drive(() => loop(() => ingestAllStep(false)))}>Ingest all (queued)</button>
+            <button type="button" className="ghost-btn" onClick={drive(() => loop(() => ingestAllStep(true)))}>Continue unfinished</button>
+            <button type="button" className="ghost-btn" disabled={sel.size === 0} onClick={drive(async () => {
+              for (const id of sel) { if (stop.current) break; await loop(() => ingestSourceStep(id)); }
+            })}>Ingest selected ({sel.size})</button>
           </>
         )}
-        {msg && <span className="action-msg ok">{running ? `Working… ${msg}` : msg}</span>}
       </div>
 
+      <p style={{ color: "var(--color-muted)", fontSize: 14, margin: "0 0 6px" }}>
+        {complete}/{sources.length} sources complete · {pendingPages} pages pending
+        {running && msg ? ` · ${msg}` : ""}
+      </p>
+      <p style={{ color: "var(--color-faint)", fontSize: 12, margin: "0 0 12px" }}>
+        Progress is saved as it goes. Refreshing or leaving is safe — it only pauses the
+        loop; click Continue unfinished to resume.
+      </p>
+
       <ul className="unit-list">
-        {sources.map((s) => (
-          <li key={s.id}>
-            <div className="unit-link" style={{ cursor: "default" }}>
-              <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggle(s.id)} disabled={running} />
-              <span className={`nav-dot ${s.passages > 0 ? "state-published" : "state-planned"}`} aria-hidden />
-              <span className="source-chip">{s.id}</span>
-              <span className="unit-link-q" style={{ fontSize: 14, flex: 1 }}>
-                {s.body}
-                <span style={{ color: "var(--color-faint)", marginLeft: 8 }}>
-                  {s.passages > 0 ? `${s.passages} passages` : "not ingested"}
+        {list.map((s) => {
+          const p = s.st?.passages ?? 0;
+          const pend = s.st?.pending ?? 0;
+          return (
+            <li key={s.id}>
+              <div className="unit-link" style={{ cursor: "default" }}>
+                <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggle(s.id)} disabled={running} />
+                <span className={`nav-dot ${pend > 0 ? "state-in_review" : p > 0 ? "state-published" : "state-planned"}`} aria-hidden />
+                <span className="source-chip">{s.id}</span>
+                <span className="unit-link-q" style={{ fontSize: 14, flex: 1 }}>
+                  {s.body}
+                  <span style={{ color: "var(--color-faint)", marginLeft: 8 }}>
+                    {p > 0 ? `${p} passages` : "not ingested"}{pend > 0 ? ` · ${pend} pending` : ""}
+                  </span>
                 </span>
-              </span>
-              <button className="ghost-btn" disabled={running} onClick={drive(() => loop(() => ingestSourceStep(s.id)))}>
-                {s.passages > 0 ? "Continue" : "Ingest"}
-              </button>
-              <button className="ghost-btn" disabled={running} onClick={drive(async () => { await clearSource(s.id); await loop(() => ingestSourceStep(s.id)); })}>
-                Restart
-              </button>
-              {s.custom && (
-                <button className="ghost-btn" disabled={running} onClick={drive(async () => { await removeSource(s.id); })}>
-                  Delete
+                <button className="ghost-btn" disabled={running} onClick={drive(() => loop(() => ingestSourceStep(s.id)))}>
+                  {p > 0 ? "Continue" : "Ingest"}
                 </button>
-              )}
-            </div>
-          </li>
-        ))}
+                <button className="ghost-btn" disabled={running} onClick={drive(async () => { await clearSource(s.id); await loop(() => ingestSourceStep(s.id)); })}>
+                  Restart
+                </button>
+                {s.custom && (
+                  <button className="ghost-btn" disabled={running} onClick={drive(async () => { await removeSource(s.id); await refresh(); })}>
+                    Delete
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

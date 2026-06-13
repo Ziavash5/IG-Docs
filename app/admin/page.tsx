@@ -103,12 +103,7 @@ export default async function Admin() {
       </p>
       <AddSourceForm />
       <SourcePanel
-        sources={sources.map((s) => ({
-          id: s.id,
-          body: s.body,
-          passages: counts[s.id] ?? 0,
-          custom: s.id.startsWith("custom-"),
-        }))}
+        sources={sources.map((s) => ({ id: s.id, body: s.body, custom: s.id.startsWith("custom-") }))}
       />
 
       {/* 3 — Approval queue */}

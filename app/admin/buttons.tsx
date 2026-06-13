@@ -18,7 +18,13 @@ export function AutopilotButton() {
     let steps = 0;
     try {
       while (!stop.current) {
-        const r = await autopilotStep();
+        let r;
+        try {
+          r = await autopilotStep();
+        } catch {
+          setMsg("A step stopped early (timeout). Click Run autopilot again to resume.");
+          break;
+        }
         setMsg(r.message);
         if (++steps % 3 === 0) router.refresh();
         if (r.done || !r.ok) break;

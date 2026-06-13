@@ -67,6 +67,20 @@ export async function clearSourceData(sourceId: string): Promise<void> {
   await db`delete from ingest_queue where source_id = ${sourceId}`;
 }
 
+/** Pending/done page counts for every source, for live progress. */
+export async function allQueueCounts(): Promise<Record<string, { pending: number; done: number }>> {
+  const db = sql();
+  const rows = await db`select source_id, status, count(*)::int n from ingest_queue group by source_id, status`;
+  const out: Record<string, { pending: number; done: number }> = {};
+  for (const r of rows) {
+    const id = r.source_id as string;
+    out[id] ??= { pending: 0, done: 0 };
+    if (r.status === "pending") out[id].pending = Number(r.n);
+    else if (r.status === "done") out[id].done = Number(r.n);
+  }
+  return out;
+}
+
 export async function queueCounts(sourceId: string): Promise<{ pending: number; done: number }> {
   const db = sql();
   const [p] = await db`select count(*)::int n from ingest_queue where source_id = ${sourceId} and status = 'pending'`;
