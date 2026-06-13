@@ -16,8 +16,16 @@ What you do, in order, to take this from repo to a live app you can use.
 2. Open **SQL Editor → New query**, paste the contents of
    [`supabase/schema.sql`](../supabase/schema.sql), and **Run**. This enables `pgvector`
    and creates the `sources`, `chunks`, `units`, `claims`, and `review_queue` tables.
-3. Go to **Project Settings → Database → Connection string → URI**. Copy it — this is
-   your `DATABASE_URL`. (Use the direct connection for migrations.)
+3. Click the green **Connect** button (top of the dashboard) → copy a connection
+   string. This is your `DATABASE_URL`.
+   - For the Vercel app (serverless), use the **Transaction pooler** string (port
+     `6543`): `postgresql://postgres.<ref>:[PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres`
+   - Replace `[PASSWORD]` with your DB password (reset it under Project Settings →
+     Database if needed).
+
+   > ⚠️ **Not the same as the Data API URL.** The REST endpoint shown under
+   > Integrations → Data API (`https://<ref>.supabase.co/rest/v1/`) is **not**
+   > `DATABASE_URL`. `DATABASE_URL` always starts with `postgresql://`.
 
 ## 2. API keys (the brains)
 
