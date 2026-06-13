@@ -79,6 +79,68 @@ export async function isSeeded(): Promise<boolean> {
   }
 }
 
+/** Ask Claude for the most logical reading order; returns ordered slugs. */
+export async function autoOrderSlugs(
+  pillarTitle: string,
+  topics: { slug: string; question: string }[],
+): Promise<string[]> {
+  if (topics.length < 2) return topics.map((t) => t.slug);
+  try {
+    const msg = await anthropic().messages.create({
+      model: MODEL,
+      max_tokens: 1000,
+      thinking: { type: "adaptive" },
+      system:
+        "You order questions into the sequence a foreign company would naturally work " +
+        "through them: foundational decisions first, then dependent steps. Respond with a " +
+        "single JSON object listing every provided slug exactly once.",
+      messages: [
+        {
+          role: "user",
+          content:
+            `Pillar: ${pillarTitle}\n\n` +
+            topics.map((t) => `- ${t.slug}: ${t.question}`).join("\n") +
+            `\n\nReturn JSON: {"order": ["slug", ...]} covering every slug once.`,
+        },
+      ],
+    });
+    const parsed = parseJson<{ order: string[] }>(textOf(msg));
+    const valid = parsed.order.filter((s) => topics.some((t) => t.slug === s));
+    const missing = topics.map((t) => t.slug).filter((s) => !valid.includes(s));
+    return [...valid, ...missing];
+  } catch {
+    return topics.map((t) => t.slug);
+  }
+}
+
+/** AI review of a pillar's topic set: gaps, duplicates, weak questions, ordering. */
+export async function assessCurriculum(
+  pillarTitle: string,
+  service: string,
+  questions: string[],
+): Promise<string> {
+  const msg = await anthropic().messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    thinking: { type: "adaptive" },
+    system:
+      "You are an editor auditing a corridor-specific knowledge hub for foreign (DACH) " +
+      "companies entering Canada. Assess this pillar's question set for: coverage gaps " +
+      "(high-value questions a buyer would ask but are missing), duplicates or overlap, " +
+      "vague or low-value questions, and whether the ordering is logical. Be specific and " +
+      "concise. Plain text, short sections with dashes. No preamble.",
+    messages: [
+      {
+        role: "user",
+        content:
+          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: DACH\n\n` +
+          `Current questions:\n${questions.map((q) => `- ${q}`).join("\n")}`,
+      },
+    ],
+  });
+  return textOf(msg).trim();
+}
+
 export interface SuggestedTopic {
   title: string;
   question: string;

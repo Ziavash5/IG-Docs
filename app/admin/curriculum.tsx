@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addTopic, editTopic, removeTopic, generateUnit, suggest } from "./actions";
+import { addTopic, editTopic, removeTopic, generateUnit, suggest, reorder, autoOrder, checkQuality } from "./actions";
 import type { SuggestedTopic } from "@/lib/curriculum";
 
 type Risk = "factual" | "interpretive";
@@ -33,6 +33,16 @@ export function PillarEditor({
   const [add, setAdd] = useState({ title: "", question: "", riskTier: "factual" as Risk });
   const [suggestions, setSuggestions] = useState<SuggestedTopic[]>([]);
   const [adding, setAdding] = useState(false);
+  const [assessment, setAssessment] = useState("");
+
+  const slugs = units.map((u) => u.slug);
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= slugs.length) return;
+    const next = [...slugs];
+    [next[i], next[j]] = [next[j], next[i]];
+    run(() => reorder(next));
+  };
 
   const run = (fn: () => Promise<{ ok: boolean; message: string }>) =>
     start(async () => {
@@ -59,7 +69,7 @@ export function PillarEditor({
   return (
     <div className="pillar-editor">
       <ul className="unit-list" style={{ margin: "4px 0" }}>
-        {units.map((u) => (
+        {units.map((u, i) => (
           <li key={u.slug}>
             {editing === u.slug ? (
               <div className="topic-edit">
@@ -77,6 +87,10 @@ export function PillarEditor({
               </div>
             ) : (
               <div className="unit-link" style={{ cursor: "default" }}>
+                <span className="reorder">
+                  <button className="reorder-btn" disabled={pending || i === 0} onClick={() => move(i, -1)} aria-label="Move up">▲</button>
+                  <button className="reorder-btn" disabled={pending || i === units.length - 1} onClick={() => move(i, 1)} aria-label="Move down">▼</button>
+                </span>
                 <span className={`nav-dot state-${u.state}`} aria-hidden />
                 <span className={`tier-chip tier-${u.riskTier}`}>{u.riskTier}</span>
                 <span className="unit-link-q" style={{ fontSize: 14, flex: 1 }}>
@@ -96,10 +110,28 @@ export function PillarEditor({
       </ul>
 
       <div className="pillar-tools">
-        <button className="ghost-btn" disabled={pending} onClick={runSuggest}>Suggest topics with AI</button>
         <button className="ghost-btn" onClick={() => setAdding((v) => !v)}>{adding ? "Close" : "Add topic"}</button>
+        <button className="ghost-btn" disabled={pending} onClick={runSuggest}>Suggest topics (AI)</button>
+        <button className="ghost-btn" disabled={pending || units.length < 2} onClick={() => run(() => autoOrder(pillarSlug, pillarTitle))}>Auto-order (AI)</button>
+        <button className="ghost-btn" disabled={pending} onClick={() =>
+          start(async () => {
+            setMsg("Reviewing…");
+            const r = await checkQuality(pillarTitle, service, units.map((u) => u.question));
+            if (r.ok && r.text) { setAssessment(r.text); setMsg(""); } else setMsg(r.message ?? "Failed.");
+          })
+        }>Check quality (AI)</button>
         {msg && <span className="action-msg ok">{msg}</span>}
       </div>
+
+      {assessment && (
+        <div className="assessment">
+          <div className="assessment-head">
+            <strong>Curriculum review</strong>
+            <button className="reorder-btn" onClick={() => setAssessment("")} aria-label="Dismiss">✕</button>
+          </div>
+          <pre>{assessment}</pre>
+        </div>
+      )}
 
       {suggestions.length > 0 && (
         <ul className="suggest-list">

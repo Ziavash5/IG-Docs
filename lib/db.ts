@@ -224,6 +224,14 @@ export async function deleteTopic(id: string): Promise<void> {
   await db`delete from topics where id = ${id}`;
 }
 
+/** Persist an explicit order for a set of topic ids (position = index). */
+export async function reorderTopics(orderedIds: string[]): Promise<void> {
+  const db = sql();
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db`update topics set position = ${i} where id = ${orderedIds[i]}`;
+  }
+}
+
 export async function topicCount(): Promise<number> {
   const db = sql();
   const [r] = await db`select count(*)::int as n from topics`;

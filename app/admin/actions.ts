@@ -14,11 +14,18 @@ import {
   insertTopic,
   updateTopic,
   deleteTopic,
+  reorderTopics,
   saveUnitBody as dbSaveBody,
   getUnitContent,
 } from "@/lib/db";
 import { anthropic, MODEL, textOf } from "@/lib/anthropic";
-import { seedDefaults, suggestTopics, type SuggestedTopic } from "@/lib/curriculum";
+import {
+  seedDefaults,
+  suggestTopics,
+  autoOrderSlugs,
+  assessCurriculum,
+  type SuggestedTopic,
+} from "@/lib/curriculum";
 import type { Corridor, RiskTier } from "@/lib/question-unit";
 
 const CORRIDOR: Corridor = "dach";
@@ -104,6 +111,45 @@ export async function suggest(
     return { ok: true, suggestions };
   } catch (e) {
     return { ok: false, message: errMsg(e), suggestions: [] };
+  }
+}
+
+/** Persist a manual reorder (client passes the new slug order for one pillar). */
+export async function reorder(orderedSlugs: string[]): Promise<ActionResult> {
+  try {
+    await reorderTopics(orderedSlugs);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Reordered." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Let AI order a pillar's topics into a logical sequence. */
+export async function autoOrder(pillarSlug: string, pillarTitle: string): Promise<ActionResult> {
+  try {
+    const topics = (await listTopics()).filter((t) => t.pillarSlug === pillarSlug);
+    const ordered = await autoOrderSlugs(pillarTitle, topics.map((t) => ({ slug: t.slug, question: t.question })));
+    await reorderTopics(ordered);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Reordered by AI." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** AI quality review of a pillar's question set. */
+export async function checkQuality(
+  pillarTitle: string,
+  service: string,
+  questions: string[],
+): Promise<{ ok: boolean; text?: string; message?: string }> {
+  try {
+    return { ok: true, text: await assessCurriculum(pillarTitle, service, questions) };
+  } catch (e) {
+    return { ok: false, message: errMsg(e) };
   }
 }
 
