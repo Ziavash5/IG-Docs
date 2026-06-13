@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "./nav";
+import { getCurriculum } from "@/lib/curriculum";
 
 export const metadata: Metadata = {
   title: "InterGest Canada — The Art of Being Local in Canada",
@@ -13,12 +14,13 @@ export const metadata: Metadata = {
  * a readable content column, in the spirit of Foundry / GitHub docs. The nav is a
  * placeholder tree until units are wired from the corpus.
  */
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const journey = await getCurriculum();
   return (
     <html lang="en">
       <body>
         <div className="shell">
-          <Nav />
+          <Nav journey={journey} />
           <main className="content">
             <div className="col">{children}</div>
           </main>

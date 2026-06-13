@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import type { Source, Chunk, RetrievedSpan } from "./pipeline/types";
+import type { TopicRow } from "./content";
 
 /**
  * Postgres + pgvector access. The client is lazily created so `next build`
@@ -173,6 +174,102 @@ export async function ingestStats(): Promise<{ sources: number; chunks: number }
   const [s] = await db`select count(*)::int as n from sources`;
   const [c] = await db`select count(*)::int as n from chunks`;
   return { sources: Number(s.n), chunks: Number(c.n) };
+}
+
+// ---- Curriculum (editable topics) -------------------------------------------
+
+export async function listTopics(): Promise<TopicRow[]> {
+  const db = sql();
+  const rows = await db`
+    select id, stage, pillar_slug, slug, title, question, risk_tier, position
+    from topics order by pillar_slug, position
+  `;
+  return rows.map((r) => ({
+    id: r.id as string,
+    stage: r.stage as string,
+    pillarSlug: r.pillar_slug as string,
+    slug: r.slug as string,
+    title: r.title as string,
+    question: r.question as string,
+    riskTier: r.risk_tier as TopicRow["riskTier"],
+    position: Number(r.position),
+  }));
+}
+
+export async function insertTopic(t: TopicRow): Promise<void> {
+  const db = sql();
+  await db`
+    insert into topics (id, stage, pillar_slug, slug, title, question, risk_tier, position)
+    values (${t.id}, ${t.stage}, ${t.pillarSlug}, ${t.slug}, ${t.title}, ${t.question},
+            ${t.riskTier}, ${t.position})
+    on conflict (id) do nothing
+  `;
+}
+
+export async function updateTopic(
+  id: string,
+  fields: { title: string; question: string; riskTier: string },
+): Promise<void> {
+  const db = sql();
+  await db`
+    update topics set title = ${fields.title}, question = ${fields.question},
+      risk_tier = ${fields.riskTier} where id = ${id}
+  `;
+}
+
+export async function deleteTopic(id: string): Promise<void> {
+  const db = sql();
+  await db`delete from topics where id = ${id}`;
+}
+
+export async function topicCount(): Promise<number> {
+  const db = sql();
+  const [r] = await db`select count(*)::int as n from topics`;
+  return Number(r.n);
+}
+
+/** unit status keyed by slug, so the curriculum can show what's been generated. */
+export async function unitStatusBySlug(): Promise<Record<string, string>> {
+  const db = sql();
+  const rows = await db`select slug, status from units`;
+  const out: Record<string, string> = {};
+  for (const r of rows) out[r.slug as string] = r.status as string;
+  return out;
+}
+
+export interface PublicUnit {
+  question: string;
+  body: string | null;
+  status: string;
+  lastReviewed: string | null;
+  citations: string[];
+  claims: { text: string; sourceId: string; locator: string; verified: boolean }[];
+}
+
+/** Generated content for a slug, for public rendering. */
+export async function getUnitContent(slug: string): Promise<PublicUnit | null> {
+  const db = sql();
+  const [u] = await db`
+    select question, body, status, last_reviewed from units where slug = ${slug} limit 1
+  `;
+  if (!u) return null;
+  const claims = await db`
+    select text, source_id, locator, verified from claims
+    where unit_id = (select id from units where slug = ${slug} limit 1)
+  `;
+  return {
+    question: u.question as string,
+    body: (u.body as string) ?? null,
+    status: u.status as string,
+    lastReviewed: u.last_reviewed ? String(u.last_reviewed).slice(0, 10) : null,
+    citations: [...new Set(claims.map((c) => c.source_id as string))],
+    claims: claims.map((c) => ({
+      text: c.text as string,
+      sourceId: c.source_id as string,
+      locator: c.locator as string,
+      verified: c.verified as boolean,
+    })),
+  };
 }
 
 /** Passage count per source id, for showing ingest status in the console. */

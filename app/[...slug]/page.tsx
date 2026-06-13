@@ -1,67 +1,73 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  journey,
-  findStage,
-  findPillar,
-  findUnit,
-  allUnitParams,
-  pathFor,
-  type UnitEntry,
-} from "@/lib/content";
+import { pathFor, findUnit as findStaticUnit, type Stage, type UnitEntry } from "@/lib/content";
+import { getCurriculum, unitContent } from "@/lib/curriculum";
+import type { PublicUnit } from "@/lib/db";
 import { BookCall } from "../components";
+
+export const dynamic = "force-dynamic";
 
 type Params = { slug: string[] };
 
-export function generateStaticParams() {
-  const params: Params[] = [];
-  for (const s of journey) {
-    params.push({ slug: [s.slug] });
-    for (const p of s.pillars) {
-      params.push({ slug: [s.slug, p.slug] });
-      for (const u of p.units) params.push({ slug: [s.slug, p.slug, u.slug] });
-    }
-  }
-  return params;
+function resolve(journey: Stage[], slug: string[]) {
+  const stage = journey.find((s) => s.slug === slug[0]);
+  if (!stage) return null;
+  if (slug.length === 1) return { kind: "stage" as const, stage };
+  const pillar = stage.pillars.find((p) => p.slug === slug[1]);
+  if (!pillar) return null;
+  if (slug.length === 2) return { kind: "pillar" as const, stage, pillar };
+  const unit = pillar.units.find((u) => u.slug === slug[2]);
+  if (!unit) return null;
+  return { kind: "unit" as const, stage, pillar, unit };
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<Params>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
-  if (slug.length === 3) {
-    const found = findUnit(slug[0], slug[1], slug[2]);
-    if (found) return { title: `${found.unit.question} — InterGest Canada` };
-  }
-  if (slug.length === 2) {
-    const found = findPillar(slug[0], slug[1]);
-    if (found) return { title: `${found.pillar.title} — InterGest Canada` };
-  }
-  const stage = findStage(slug[0]);
-  return { title: stage ? `${stage.label} — InterGest Canada` : "InterGest Canada" };
+  const r = resolve(await getCurriculum(), slug);
+  if (!r) return { title: "InterGest Canada" };
+  if (r.kind === "unit") return { title: `${r.unit.question} — InterGest Canada` };
+  if (r.kind === "pillar") return { title: `${r.pillar.title} — InterGest Canada` };
+  return { title: `${r.stage.label} — InterGest Canada` };
 }
+
+const riskLabel = (tier: string) =>
+  tier === "interpretive" ? "Decided on a call" : "Source-verified";
 
 export default async function Page({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
+  const journey = await getCurriculum();
+  const r = resolve(journey, slug);
+  if (!r) notFound();
 
-  if (slug.length === 3) return <UnitView a={slug[0]} b={slug[1]} c={slug[2]} />;
-  if (slug.length === 2) return <PillarView a={slug[0]} b={slug[1]} />;
-  if (slug.length === 1) return <StageView a={slug[0]} />;
-  notFound();
+  if (r.kind === "stage") return <StageView stage={r.stage} />;
+  if (r.kind === "pillar") return <PillarView stage={r.stage} pillar={r.pillar} />;
+
+  const content = await unitContent(r.unit.slug);
+  return <UnitView stageSlug={r.stage.slug} pillarSlug={r.pillar.slug} stageLabel={r.stage.label}
+    pillarTitle={r.pillar.title} pillarN={r.pillar.n} unit={r.unit} content={content} />;
 }
 
-function riskLabel(tier: string) {
-  return tier === "interpretive" ? "Decided on a call" : "Source-verified";
+// ---- Markdown (minimal, for generated bodies) -------------------------------
+
+function Markdown({ text }: { text: string }) {
+  const blocks = text.split(/\n{2,}/).filter(Boolean);
+  return (
+    <>
+      {blocks.map((b, i) => {
+        if (b.startsWith("## ")) return <h2 key={i}>{b.slice(3)}</h2>;
+        const lines = b.split("\n");
+        if (lines.every((l) => l.startsWith("- ")))
+          return <ul key={i}>{lines.map((l, j) => <li key={j}>{l.slice(2)}</li>)}</ul>;
+        return <p key={i}>{b}</p>;
+      })}
+    </>
+  );
 }
 
-// ---- Stage landing -----------------------------------------------------------
+// ---- Stage landing ----------------------------------------------------------
 
-function StageView({ a }: { a: string }) {
-  const stage = findStage(a);
-  if (!stage) notFound();
+function StageView({ stage }: { stage: Stage }) {
   return (
     <>
       <p className="eyebrow">{stage.label}</p>
@@ -81,22 +87,15 @@ function StageView({ a }: { a: string }) {
   );
 }
 
-// ---- Pillar landing ----------------------------------------------------------
+// ---- Pillar landing ---------------------------------------------------------
 
-function PillarView({ a, b }: { a: string; b: string }) {
-  const found = findPillar(a, b);
-  if (!found) notFound();
-  const { stage, pillar } = found;
+function PillarView({ stage, pillar }: { stage: Stage; pillar: Stage["pillars"][number] }) {
   return (
     <>
-      <p className="eyebrow">
-        {stage.label} · Pillar {pillar.n}
-      </p>
+      <p className="eyebrow">{stage.label} · Pillar {pillar.n}</p>
       <h1 style={{ fontSize: 38 }}>{pillar.title}</h1>
       <p className="lead">{pillar.blurb}</p>
-      <p className="card-service" style={{ marginTop: -8 }}>
-        InterGest service: {pillar.service}
-      </p>
+      <p className="card-service" style={{ marginTop: -8 }}>InterGest service: {pillar.service}</p>
       <ul className="unit-list">
         {pillar.units.map((u) => (
           <li key={u.slug}>
@@ -113,21 +112,26 @@ function PillarView({ a, b }: { a: string; b: string }) {
   );
 }
 
-// ---- Unit reading experience -------------------------------------------------
+// ---- Unit reading experience ------------------------------------------------
 
-function StatusBadge({ unit }: { unit: UnitEntry }) {
-  const map: Record<string, string> = {
-    published: "Published",
-    in_review: "In review · pending source verification",
-    planned: "In production",
-  };
-  return <span className={`status-badge state-${unit.state}`}>{map[unit.state]}</span>;
-}
+function UnitView({
+  stageLabel, pillarTitle, pillarN, unit, content,
+}: {
+  stageSlug: string; pillarSlug: string; stageLabel: string;
+  pillarTitle: string; pillarN: number; unit: UnitEntry; content: PublicUnit | null;
+}) {
+  // Prefer generated content from the DB; otherwise fall back to the in-code exemplar.
+  const exemplar = findStaticUnit("enter", "decide-structure", unit.slug)?.unit.content;
+  const hasGenerated = content?.body && content.status !== "planned";
 
-function UnitView({ a, b, c }: { a: string; b: string; c: string }) {
-  const found = findUnit(a, b, c);
-  if (!found) notFound();
-  const { stage, pillar, unit } = found;
+  const badge =
+    content?.status === "published"
+      ? "Published"
+      : hasGenerated
+      ? "In review · pending source verification"
+      : exemplar
+      ? "In review · pending source verification"
+      : "In production";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -136,78 +140,73 @@ function UnitView({ a, b, c }: { a: string; b: string; c: string }) {
       {
         "@type": "Question",
         name: unit.question,
-        acceptedAnswer: { "@type": "Answer", text: unit.content?.directAnswer ?? "" },
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: hasGenerated ? content!.body!.slice(0, 500) : exemplar?.directAnswer ?? "",
+        },
       },
     ],
   };
 
   return (
     <article>
-      <p className="eyebrow">
-        {stage.label} · Pillar {pillar.n} · {pillar.title}
-      </p>
+      <p className="eyebrow">{stageLabel} · Pillar {pillarN} · {pillarTitle}</p>
       <div className="unit-head">
         <h1 style={{ fontSize: 34 }}>{unit.question}</h1>
-        <StatusBadge unit={unit} />
+        <span className={`status-badge state-${content?.status === "published" ? "published" : hasGenerated || exemplar ? "in_review" : "planned"}`}>
+          {badge}
+        </span>
       </div>
 
-      {unit.content ? (
+      {hasGenerated ? (
         <>
-          <p className="direct-answer">{unit.content.directAnswer}</p>
-
-          {unit.content.sections.map((s) => (
-            <section key={s.heading}>
-              <h2>{s.heading}</h2>
-              <p>{s.body}</p>
-            </section>
-          ))}
-
-          {unit.content.corridorDelta && (
-            <div className="corridor-callout">
-              <strong>How it differs for your corridor (DACH)</strong>
-              <p style={{ margin: "8px 0 0" }}>{unit.content.corridorDelta}</p>
-            </div>
-          )}
-
-          {unit.content.checklist && (
-            <>
-              <h2>Checklist</h2>
-              <ul className="checklist">
-                {unit.content.checklist.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {unit.citations && (
+          <Markdown text={content!.body!} />
+          {content!.citations.length > 0 && (
             <div className="citations">
               <span className="citations-label">Sources</span>
-              {unit.citations.map((id) => (
-                <span key={id} className="source-chip">
-                  {id}
-                </span>
+              {content!.citations.map((id) => (
+                <span key={id} className="source-chip">{id}</span>
               ))}
             </div>
           )}
-
           <div className="trust-strip">
             General information, not advice. Your specific situation is decided on a call.
             <br />
-            Author: pending byline + credentials · Last reviewed: 2026-06-13
+            Last reviewed: {content!.lastReviewed ?? "pending"}
           </div>
-
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-          />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        </>
+      ) : exemplar ? (
+        <>
+          <p className="direct-answer">{exemplar.directAnswer}</p>
+          {exemplar.sections.map((s) => (
+            <section key={s.heading}><h2>{s.heading}</h2><p>{s.body}</p></section>
+          ))}
+          {exemplar.corridorDelta && (
+            <div className="corridor-callout">
+              <strong>How it differs for your corridor (DACH)</strong>
+              <p style={{ margin: "8px 0 0" }}>{exemplar.corridorDelta}</p>
+            </div>
+          )}
+          {exemplar.checklist && (
+            <>
+              <h2>Checklist</h2>
+              <ul className="checklist">{exemplar.checklist.map((c, i) => <li key={i}>{c}</li>)}</ul>
+            </>
+          )}
+          <div className="trust-strip">
+            General information, not advice. Your specific situation is decided on a call.
+            <br />
+            Last reviewed: 2026-06-13
+          </div>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         </>
       ) : (
         <div className="in-production">
           <p className="lead">
             We are still writing this one. When it is ready it will answer{" "}
-            <strong>“{unit.question}”</strong> for your corridor, with every fact tied
-            back to the official source it came from.
+            <strong>“{unit.question}”</strong> for your corridor, with every fact tied back
+            to the official source it came from.
           </p>
           <p className="card-service">{riskLabel(unit.riskTier)}</p>
           <p style={{ margin: "8px 0 0" }}>

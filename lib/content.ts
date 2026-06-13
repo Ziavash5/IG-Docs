@@ -326,6 +326,53 @@ export function findUnit(stageSlug: string, pillarSlug: string, unitSlug: string
   return unit ? { ...found!, unit } : undefined;
 }
 
+/** Look up a pillar's number/metadata by its slug (pillars are fixed config). */
+export function pillarBySlug(slug: string): { n: number; title: string; service: string; stageSlug: string } | undefined {
+  for (const s of journey) {
+    const p = s.pillars.find((x) => x.slug === slug);
+    if (p) return { n: p.n, title: p.title, service: p.service, stageSlug: s.slug };
+  }
+  return undefined;
+}
+
+export interface TopicRow {
+  id: string;
+  stage: string;
+  pillarSlug: string;
+  slug: string;
+  title: string;
+  question: string;
+  riskTier: RiskTier;
+  position: number;
+}
+
+/** Flatten the default journey into topic rows, for seeding the editable curriculum. */
+export function defaultTopicRows(): TopicRow[] {
+  const rows: TopicRow[] = [];
+  for (const s of journey) {
+    for (const p of s.pillars) {
+      p.units.forEach((u, i) => {
+        rows.push({
+          id: u.slug,
+          stage: s.slug,
+          pillarSlug: p.slug,
+          slug: u.slug,
+          title: u.title,
+          question: u.question,
+          riskTier: u.riskTier,
+          position: i,
+        });
+      });
+    }
+  }
+  return rows;
+}
+
+/** Pillar shells (no units) keyed for rebuilding the tree from DB topics. */
+export function pillarShells(): Stage[] {
+  return journey.map((s) => ({ ...s, pillars: s.pillars.map((p) => ({ ...p, units: [] })) }));
+}
+
 /** Every (stage, pillar, unit) triple — used for static generation. */
 export function allUnitParams() {
   return journey.flatMap((s) =>

@@ -1,20 +1,108 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { findUnit } from "@/lib/content";
+import { pillarBySlug } from "@/lib/content";
 import { selectSources, retrieveSpans } from "@/lib/pipeline/retrieve";
 import { writeUnit } from "@/lib/pipeline/write";
 import { verifyClaims, route } from "@/lib/pipeline/verify";
 import { ingestSource, ingestAll } from "@/lib/pipeline/ingest";
 import { SOURCE_REGISTRY } from "@/lib/sources-registry";
-import { storeUnit, approveUnit as dbApprove } from "@/lib/db";
-import type { Corridor } from "@/lib/question-unit";
+import {
+  storeUnit,
+  approveUnit as dbApprove,
+  listTopics,
+  insertTopic,
+  updateTopic,
+  deleteTopic,
+} from "@/lib/db";
+import { seedDefaults, suggestTopics, type SuggestedTopic } from "@/lib/curriculum";
+import type { Corridor, RiskTier } from "@/lib/question-unit";
 
 const CORRIDOR: Corridor = "dach";
 
 export type ActionResult = { ok: boolean; message: string };
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+const slugify = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+
+// ---- Curriculum authoring ---------------------------------------------------
+
+export async function seedCurriculum(): Promise<ActionResult> {
+  try {
+    const n = await seedDefaults();
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Seeded ${n} topics from defaults.` };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function addTopic(
+  stage: string,
+  pillarSlug: string,
+  t: { title: string; question: string; riskTier: RiskTier },
+): Promise<ActionResult> {
+  if (!t.title.trim() || !t.question.trim()) return { ok: false, message: "Title and question are required." };
+  try {
+    const slug = `${slugify(t.title)}-${Math.random().toString(36).slice(2, 6)}`;
+    await insertTopic({
+      id: slug,
+      stage,
+      pillarSlug,
+      slug,
+      title: t.title.trim(),
+      question: t.question.trim(),
+      riskTier: t.riskTier,
+      position: Math.floor(Date.now() / 100000),
+    });
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Added." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function editTopic(
+  id: string,
+  t: { title: string; question: string; riskTier: RiskTier },
+): Promise<ActionResult> {
+  try {
+    await updateTopic(id, { title: t.title, question: t.question, riskTier: t.riskTier });
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Saved." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function removeTopic(id: string): Promise<ActionResult> {
+  try {
+    await deleteTopic(id);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Removed." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function suggest(
+  pillarTitle: string,
+  service: string,
+  existing: string[],
+): Promise<{ ok: boolean; message?: string; suggestions: SuggestedTopic[] }> {
+  try {
+    const suggestions = await suggestTopics(pillarTitle, service, existing);
+    return { ok: true, suggestions };
+  } catch (e) {
+    return { ok: false, message: errMsg(e), suggestions: [] };
+  }
+}
 
 /** Ingest one official source into pgvector. */
 export async function ingestOne(sourceId: string): Promise<ActionResult> {
@@ -54,34 +142,31 @@ export async function ingestEverything(): Promise<ActionResult> {
  * Generate a unit end-to-end: corridor-aware retrieval → cited draft → dual-retrieval
  * verification → auto-publish (factual + all agree) or route to the queue.
  */
-export async function generateUnit(
-  stage: string,
-  pillarSlug: string,
-  unitSlug: string,
-): Promise<ActionResult> {
-  const found = findUnit(stage, pillarSlug, unitSlug);
-  if (!found) return { ok: false, message: "Unknown unit." };
-  const { pillar, unit } = found;
+export async function generateUnit(topicSlug: string): Promise<ActionResult> {
+  const topic = (await listTopics()).find((t) => t.slug === topicSlug);
+  if (!topic) return { ok: false, message: "Unknown topic." };
+  const pillar = pillarBySlug(topic.pillarSlug);
+  if (!pillar) return { ok: false, message: "Unknown pillar." };
 
   try {
-    const sourceIds = await selectSources(unit.question, CORRIDOR);
-    const spans = await retrieveSpans(unit.question, sourceIds);
+    const sourceIds = await selectSources(topic.question, CORRIDOR);
+    const spans = await retrieveSpans(topic.question, sourceIds);
     if (spans.length === 0) {
       return { ok: false, message: "No source passages retrieved — ingest the relevant sources first." };
     }
     const draft = await writeUnit({
-      question: unit.question,
+      question: topic.question,
       corridor: CORRIDOR,
       pillar: pillar.n as 1 | 2 | 3 | 4 | 5 | 6 | 7,
-      riskTier: unit.riskTier,
+      riskTier: topic.riskTier,
       spans,
     });
     if (draft.claims.length === 0) {
       return { ok: false, message: "Draft produced no source-grounded claims. Try ingesting more sources." };
     }
 
-    const verdict = await verifyClaims(draft.claims, sourceIds, unit.riskTier);
-    const decision = route(unit.riskTier, verdict);
+    const verdict = await verifyClaims(draft.claims, sourceIds, topic.riskTier);
+    const decision = route(topic.riskTier, verdict);
 
     const claims = draft.claims.map((c, i) => ({
       text: c.text,
@@ -101,20 +186,20 @@ export async function generateUnit(
 
     const queueReason =
       decision === "operator"
-        ? unit.riskTier === "interpretive"
+        ? topic.riskTier === "interpretive"
           ? "interpretive"
           : "verification-disagreement"
         : undefined;
 
     await storeUnit({
-      id: `${CORRIDOR}-${unitSlug}`,
-      slug: unitSlug,
-      question: unit.question,
+      id: `${CORRIDOR}-${topicSlug}`,
+      slug: topicSlug,
+      question: topic.question,
       pillar: pillar.n,
       layer: "overlay",
       corridor: CORRIDOR,
       jurisdictions: ["CA", "DE"],
-      riskTier: unit.riskTier,
+      riskTier: topic.riskTier,
       status: decision === "auto-ship" ? "published" : "in_review",
       lastReviewed: new Date().toISOString().slice(0, 10),
       cta: "Book a 20-minute Canada-entry call",
@@ -125,6 +210,7 @@ export async function generateUnit(
     });
 
     revalidatePath("/admin");
+    revalidatePath("/", "layout");
     return {
       ok: true,
       message:
@@ -142,6 +228,7 @@ export async function approveUnit(unitId: string): Promise<ActionResult> {
   try {
     await dbApprove(unitId);
     revalidatePath("/admin");
+    revalidatePath("/", "layout");
     return { ok: true, message: "Published." };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };

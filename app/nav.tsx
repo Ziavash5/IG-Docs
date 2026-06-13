@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { journey, corridors, pathFor } from "@/lib/content";
+import { corridors, pathFor, type Stage } from "@/lib/content";
 
 /**
  * Left navigation: home-country selector, then journey stages → pillars → units.
- * Data-driven from lib/content.ts. On mobile the tree collapses behind a toggle.
+ * The tree (`journey`) comes from the editable, DB-backed curriculum. On mobile it
+ * collapses behind a toggle.
  */
-export default function Nav() {
+export default function Nav({ journey }: { journey: Stage[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);

@@ -333,6 +333,26 @@ p { margin: 14px 0; }
 .ghost-btn:hover { border-color: var(--color-brand); color: var(--color-brand); }
 .book-call-btn { border: none; cursor: pointer; font-size: 14px; }
 
+.pillar-editor { border: 1px solid var(--color-line); border-radius: 10px; padding: 6px 16px 14px; background: #fff; }
+.pillar-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.topic-edit { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
+.topic-edit input, .topic-edit textarea, .topic-edit select {
+  font-family: var(--font-body);
+  font-size: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  padding: 8px 10px;
+  width: 100%;
+}
+.topic-edit-row { display: flex; gap: 10px; align-items: center; }
+.topic-edit-row select { width: auto; }
+.suggest-list { list-style: none; padding: 0; margin: 12px 0; }
+.suggest-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--color-line);
+  border-radius: 8px; margin-bottom: 6px; background: var(--color-bg-soft);
+}
+
 .action-cell { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .action-msg { font-size: 13px; }
 .action-msg.ok { color: #1f7a47; }
