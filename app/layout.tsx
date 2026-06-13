@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Nav from "./nav";
 
 export const metadata: Metadata = {
   title: "InterGest Canada — The Art of Being Local in Canada",
@@ -17,18 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <div className="shell">
-          <nav className="nav">
-            <div className="brand">InterGest Canada</div>
-            <ul>
-              <li><a href="/">Overview</a></li>
-              <li><a href="/corridors/dach">DACH corridor</a></li>
-              <li style={{ paddingLeft: 12 }}>
-                <a href="/corridors/dach/germany-branch-vs-subsidiary-canada">
-                  Branch vs subsidiary
-                </a>
-              </li>
-            </ul>
-          </nav>
+          <Nav />
           <main className="content">
             <div className="col">{children}</div>
           </main>

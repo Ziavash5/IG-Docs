@@ -3,17 +3,19 @@
 
 :root {
   /* Confirm exact brand hex + font licenses before launch (see docs/design.md). */
-  --color-brand: #d6a45f;
+  --color-brand: #c8924f;
+  --color-brand-soft: #e8d4b4;
   --color-ink: #1a1a1a;
   --color-muted: #6b6b6b;
-  --color-line: #e6e1d8;
+  --color-faint: #9a958c;
+  --color-line: #e9e3d8;
   --color-bg: #ffffff;
   --color-bg-soft: #faf7f1;
 
   --font-head: "General Sans", system-ui, sans-serif;
   --font-body: Arial, Helvetica, sans-serif;
 
-  --nav-width: 280px;
+  --nav-width: 312px;
   --content-max: 760px;
 }
 
@@ -26,7 +28,7 @@ html, body {
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: 17px;
-  line-height: 1.6;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -34,52 +36,188 @@ h1, h2, h3, h4 {
   font-family: var(--font-head);
   font-weight: 600;
   line-height: 1.15;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
   color: var(--color-ink);
 }
+h2 { font-size: 24px; margin-top: 40px; }
+h3 { font-size: 19px; }
 
 a { color: var(--color-brand); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* Swiss docs shell: persistent left nav + readable content column. */
-.shell { display: grid; grid-template-columns: var(--nav-width) 1fr; min-height: 100vh; }
+p { margin: 14px 0; }
+.lead { font-size: 20px; color: var(--color-muted); max-width: 640px; }
 
+/* ---- Shell ---------------------------------------------------------------- */
+.shell { display: grid; grid-template-columns: var(--nav-width) 1fr; min-height: 100vh; }
+.content { padding: 64px 56px 120px; }
+.content .col { max-width: var(--content-max); margin: 0 auto; }
+
+/* ---- Navigation ----------------------------------------------------------- */
 .nav {
   border-right: 1px solid var(--color-line);
-  padding: 32px 24px;
+  background: var(--color-bg-soft);
   position: sticky;
   top: 0;
   align-self: start;
   height: 100vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 0 0;
 }
-.nav .brand { font-family: var(--font-head); font-weight: 700; letter-spacing: 0.02em; }
-.nav ul { list-style: none; padding: 0; margin: 16px 0 0; }
-.nav li { margin: 2px 0; }
-.nav a { color: var(--color-ink); display: block; padding: 6px 8px; border-radius: 6px; font-size: 15px; }
-.nav a:hover { background: var(--color-bg-soft); text-decoration: none; }
+.nav-brand { display: block; padding: 0 24px 18px; text-decoration: none; }
+.nav-brand:hover { text-decoration: none; }
+.nav-brand-mark {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+}
+.nav-brand-sub {
+  font-family: var(--font-head);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-brand);
+  display: block;
+  margin-top: 2px;
+}
 
-.content { padding: 56px 48px; }
-.content .col { max-width: var(--content-max); margin: 0 auto; }
+.corridor-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 24px 20px;
+  border-bottom: 1px solid var(--color-line);
+}
+.corridor-pill {
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+}
+.corridor-pill.is-active { background: var(--color-brand); color: #fff; border-color: var(--color-brand); }
+.corridor-pill.is-soon { color: var(--color-faint); background: transparent; }
 
-/* Eyebrow + heading pattern (Step/Pillar label). */
+.nav-scroll { overflow-y: auto; padding: 20px 0 40px; flex: 1; }
+.nav-stage { padding: 0 14px; margin-bottom: 24px; }
+.nav-stage-label {
+  display: block;
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  padding: 0 10px 8px;
+}
+.nav-stage-label:hover { color: var(--color-brand); text-decoration: none; }
+
+.nav-pillar { margin-bottom: 4px; }
+.nav-pillar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-head);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-ink);
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+.nav-pillar-title:hover { background: rgba(0,0,0,0.03); text-decoration: none; }
+.nav-pillar-title.is-open { color: var(--color-brand); }
+.nav-pillar-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  font-size: 11px;
+  border-radius: 5px;
+  background: var(--color-brand-soft);
+  color: #6b4d22;
+}
+
+.nav-units { list-style: none; margin: 2px 0 6px; padding: 0 0 0 18px; border-left: 1px solid var(--color-line); margin-left: 19px; }
+.nav-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--color-muted);
+  padding: 5px 10px;
+  border-radius: 6px;
+  line-height: 1.35;
+}
+.nav-unit:hover { background: rgba(0,0,0,0.03); color: var(--color-ink); text-decoration: none; }
+.nav-unit.is-active { background: #fff; color: var(--color-ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--color-brand); }
+.nav-unit.is-planned { color: var(--color-faint); }
+
+.nav-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.state-published { background: #2f9e5e; }
+.state-in_review { background: var(--color-brand); }
+.state-planned { background: var(--color-line); border: 1px solid var(--color-faint); }
+
+/* ---- Eyebrow / accent headers --------------------------------------------- */
 .eyebrow {
   font-family: var(--font-head);
   font-weight: 600;
   color: var(--color-brand);
-  text-transform: none;
-  font-size: 15px;
-  letter-spacing: 0.04em;
-  margin-bottom: 8px;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--color-line);
 }
-
-/* All-caps mixed-weight accent header: "THE ART OF BEING LOCAL". */
-.accent-head { font-family: var(--font-head); text-transform: uppercase; font-weight: 400; letter-spacing: 0.01em; }
+.accent-head { font-family: var(--font-head); text-transform: uppercase; font-weight: 400; letter-spacing: 0.005em; line-height: 1.05; }
 .accent-head strong { font-weight: 700; }
 
-/* Corridor delta — the moat — visually distinct warm block. */
+/* ---- Cards (landing pages) ------------------------------------------------ */
+.stage-block { margin-top: 40px; }
+.card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 24px 0; }
+.card {
+  display: block;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 20px 22px;
+  color: var(--color-ink);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.card:hover { border-color: var(--color-brand); transform: translateY(-2px); text-decoration: none; }
+.card-n { font-family: var(--font-head); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-brand); }
+.card h3 { margin: 6px 0 4px; }
+.card-service { font-size: 13px; color: var(--color-faint); margin: 2px 0; }
+
+/* ---- Pillar unit list ----------------------------------------------------- */
+.unit-list { list-style: none; padding: 0; margin: 28px 0; }
+.unit-list li { border-top: 1px solid var(--color-line); }
+.unit-list li:last-child { border-bottom: 1px solid var(--color-line); }
+.unit-link { display: flex; align-items: center; gap: 12px; padding: 16px 4px; color: var(--color-ink); }
+.unit-link:hover { text-decoration: none; color: var(--color-brand); }
+.unit-link-q { flex: 1; font-size: 16px; }
+.tier-chip { font-family: var(--font-head); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.tier-factual { background: #e7f4ec; color: #1f7a47; }
+.tier-interpretive { background: var(--color-bg-soft); color: #8a6320; border: 1px solid var(--color-brand-soft); }
+
+/* ---- Unit reading experience ---------------------------------------------- */
+.unit-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.status-badge { font-family: var(--font-head); font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; margin-top: 6px; }
+.status-badge.state-published { background: #e7f4ec; color: #1f7a47; }
+.status-badge.state-in_review { background: var(--color-bg-soft); color: #8a6320; border: 1px solid var(--color-brand-soft); }
+.status-badge.state-planned { background: #f1f1f1; color: var(--color-muted); }
+
+.direct-answer { font-size: 20px; line-height: 1.55; color: var(--color-ink); border-left: 3px solid var(--color-brand); padding-left: 18px; margin: 24px 0; }
+
+.checklist { padding-left: 0; list-style: none; }
+.checklist li { padding: 8px 0 8px 28px; position: relative; border-bottom: 1px solid var(--color-line); }
+.checklist li::before { content: "☐"; position: absolute; left: 0; color: var(--color-brand); }
+
 .corridor-callout {
   background: var(--color-bg-soft);
   border: 1px solid var(--color-line);
@@ -89,22 +227,44 @@ a:hover { text-decoration: underline; }
   margin: 28px 0;
 }
 
-/* Source chip on a claim. */
-.source-chip {
-  display: inline-block;
-  font-family: var(--font-head);
-  font-size: 12px;
-  background: var(--color-bg-soft);
-  border: 1px solid var(--color-line);
-  border-radius: 999px;
-  padding: 2px 10px;
-}
+.citations { margin: 32px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.citations-label { font-family: var(--font-head); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-faint); margin-right: 4px; }
+.source-chip { font-family: var(--font-head); font-size: 12px; background: var(--color-bg-soft); border: 1px solid var(--color-line); border-radius: 999px; padding: 3px 11px; color: var(--color-muted); }
 
-/* Trust strip: byline + credentials + last-reviewed (E-E-A-T). */
-.trust-strip {
-  margin-top: 40px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-line);
-  color: var(--color-muted);
-  font-size: 14px;
+.trust-strip { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--color-line); color: var(--color-muted); font-size: 14px; }
+
+.in-production { background: var(--color-bg-soft); border: 1px dashed var(--color-line); border-radius: 10px; padding: 28px 30px; margin: 28px 0; }
+
+/* ---- Book-a-call CTA ------------------------------------------------------ */
+.book-call {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 48px 0 0;
+  padding: 24px 28px;
+  border-radius: 12px;
+  background: var(--color-ink);
+  color: #fff;
+}
+.book-call strong { font-family: var(--font-head); font-size: 18px; }
+.book-call-btn {
+  font-family: var(--font-head);
+  font-weight: 600;
+  background: var(--color-brand);
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.book-call-btn:hover { background: #b07f3f; text-decoration: none; }
+
+/* ---- Responsive ----------------------------------------------------------- */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--color-line); }
+  .nav-scroll { max-height: 50vh; }
+  .content { padding: 40px 24px 80px; }
+  .card-grid { grid-template-columns: 1fr; }
 }
