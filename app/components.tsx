@@ -8,9 +8,10 @@ export function BookCall() {
   return (
     <div className="book-call" id="book">
       <div>
-        <strong>Considering Canada?</strong>
+        <strong>Have a specific situation?</strong>
         <p style={{ margin: "4px 0 0", color: "var(--color-muted)" }}>
-          Your structure, tax position, and timeline are decided on a call — not a form.
+          The guides cover the rules. Your structure, tax position, and timing come
+          together on a short call with someone who has done it before.
         </p>
       </div>
       <a className="book-call-btn" href="mailto:hello@intergest.ca?subject=Canada-entry%20call">

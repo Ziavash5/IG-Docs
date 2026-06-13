@@ -90,7 +90,7 @@ export const journey: Stage[] = [
         title: "Decide & Structure",
         service: "Business Consulting & Strategy",
         blurb:
-          "Choose how — and where — to enter Canada before you commit capital.",
+          "Choose how and where to enter Canada before you commit capital.",
         units: [
           {
             slug: "germany-branch-vs-subsidiary-canada",
@@ -120,7 +120,7 @@ export const journey: Stage[] = [
                 },
               ],
               corridorDelta:
-                "German-side consequence: a branch's Canadian result flows into the German parent's accounts; a subsidiary is a separate taxpayer whose profits face German tax only on distribution or under CFC rules. German CFC treatment (Außensteuergesetz) is the decisive variable. The Canada–Germany treaty governs branch tax and dividend withholding differently — this is the part a Canada-only competitor cannot write.",
+                "Here is what changes on the German side. A branch's Canadian result flows straight into the German parent's accounts. A subsidiary is a separate taxpayer, so its profits face German tax only on distribution or under CFC rules, and German CFC treatment (Außensteuergesetz) is usually the deciding factor. The Canada–Germany treaty also sets branch tax and dividend withholding on its own terms. This is the part a Canada-only adviser cannot write for you.",
               checklist: [
                 "Decide structure (this unit) → if subsidiary, see Incorporate & Register.",
                 "Confirm whether the activity creates a Canadian permanent establishment.",

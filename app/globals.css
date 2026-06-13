@@ -65,8 +65,21 @@ p { margin: 14px 0; }
   flex-direction: column;
   padding: 28px 0 0;
 }
-.nav-brand { display: block; padding: 0 24px 18px; text-decoration: none; }
+.nav-top { display: flex; align-items: flex-start; justify-content: space-between; padding: 0 24px 18px; }
+.nav-brand { display: block; text-decoration: none; }
 .nav-brand:hover { text-decoration: none; }
+.nav-toggle {
+  display: none;
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  padding: 6px 14px;
+  cursor: pointer;
+  color: var(--color-ink);
+}
 .nav-brand-mark {
   font-family: var(--font-head);
   font-weight: 700;
@@ -86,24 +99,44 @@ p { margin: 14px 0; }
   margin-top: 2px;
 }
 
-.corridor-switch {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 24px 20px;
-  border-bottom: 1px solid var(--color-line);
-}
-.corridor-pill {
+.corridor-field { padding: 0 24px 20px; border-bottom: 1px solid var(--color-line); }
+.corridor-field label {
+  display: block;
   font-family: var(--font-head);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--color-line);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  margin-bottom: 7px;
 }
-.corridor-pill.is-active { background: var(--color-brand); color: #fff; border-color: var(--color-brand); }
-.corridor-pill.is-soon { color: var(--color-faint); background: transparent; }
+.corridor-select-wrap { position: relative; }
+.corridor-select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--color-muted);
+  border-bottom: 2px solid var(--color-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.corridor-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: var(--font-head);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  background: #fff;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 10px 34px 10px 14px;
+  cursor: pointer;
+}
+.corridor-select:focus { outline: none; border-color: var(--color-brand); }
 
 .nav-scroll { overflow-y: auto; padding: 20px 0 40px; flex: 1; }
 .nav-stage { padding: 0 14px; margin-bottom: 24px; }
@@ -260,6 +293,30 @@ p { margin: 14px 0; }
 }
 .book-call-btn:hover { background: #b07f3f; text-decoration: none; }
 
+/* ---- How-to-use list (home) ----------------------------------------------- */
+.how-list { padding-left: 0; list-style: none; counter-reset: how; margin: 20px 0; }
+.how-list li {
+  position: relative;
+  padding: 0 0 16px 44px;
+  counter-increment: how;
+}
+.how-list li::before {
+  content: counter(how);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 28px; height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b4d22;
+  background: var(--color-brand-soft);
+  border-radius: 7px;
+}
+
 /* ---- Admin console -------------------------------------------------------- */
 .ghost-btn {
   font-family: var(--font-head);
@@ -293,8 +350,22 @@ p { margin: 14px 0; }
 /* ---- Responsive ----------------------------------------------------------- */
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
-  .nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--color-line); }
-  .nav-scroll { max-height: 50vh; }
-  .content { padding: 40px 24px 80px; }
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--color-line);
+    padding-top: 18px;
+  }
+  .nav-toggle { display: inline-flex; }
+  /* Tree is hidden on mobile until the user opens it; the country selector stays. */
+  .nav-scroll { display: none; padding: 12px 0 24px; }
+  .nav-scroll.is-open { display: block; max-height: 70vh; }
+  .content { padding: 36px 22px 80px; }
+  .content .col { max-width: 100%; }
   .card-grid { grid-template-columns: 1fr; }
+  h1 { font-size: 32px !important; }
+  .book-call { flex-direction: column; align-items: flex-start; }
 }

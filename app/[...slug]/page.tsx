@@ -205,11 +205,14 @@ function UnitView({ a, b, c }: { a: string; b: string; c: string }) {
       ) : (
         <div className="in-production">
           <p className="lead">
-            This guide is being prepared. It will answer{" "}
-            <strong>“{unit.question}”</strong> with every factual claim tied to an
-            official primary source.
+            We are still writing this one. When it is ready it will answer{" "}
+            <strong>“{unit.question}”</strong> for your corridor, with every fact tied
+            back to the official source it came from.
           </p>
           <p className="card-service">{riskLabel(unit.riskTier)}</p>
+          <p style={{ margin: "8px 0 0" }}>
+            Need the answer for your situation now? A short call is the fastest way.
+          </p>
         </div>
       )}
 

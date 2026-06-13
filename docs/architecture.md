@@ -50,6 +50,26 @@ Official sources ──► Ingestion ──► RAG corpus (chunks + Voyage embed
 | `write` | Draft a `QuestionUnit`; every claim must bind to a retrieved span or it is dropped | Claude |
 | `verify` | Dual-retrieval check: confirm each claim against its citation + an independent pass; agree → ship, disagree → escalate | Claude, pgvector |
 
+## The assistant (planned)
+
+A live chat assistant on the public site, grounded in the same corpus. It is not a
+generic chatbot bolted on. The rules:
+
+- **Same retrieval spine.** It answers only from approved units and the official sources
+  behind them (pgvector). No source span, no answer. If it does not know, it says so and
+  offers the call.
+- **Corridor-aware.** It uses the visitor's selected home country to give the answer that
+  fits them, the same way the units do.
+- **A guide, not a closer.** It helps people understand their situation and points them
+  to the right unit. When a question turns on specifics (the interpretive tier), it
+  frames that honestly and offers to book a call. The pitch is the usefulness, not a
+  hard sell.
+- **Cited in the UI.** Every claim it makes links to the official source, carrying the
+  same trust signals as the pages.
+
+Build order: it comes after the public corpus is rendered from the database and a
+meaningful set of units is approved, since it can only be as good as the corpus it reads.
+
 ## Tiered autonomy (the control surface)
 
 The approval UI exposes autonomy per rule/corridor, mirroring a settings wizard:
