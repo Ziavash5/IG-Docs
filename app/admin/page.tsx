@@ -1,9 +1,10 @@
 import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { allSources } from "@/lib/sources-registry";
 import { openQueue, ingestStats, sourceChunkCounts, type QueueRow } from "@/lib/db";
-import { approveUnit, ingestStep, ingestRestart, removeSource, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, IngestAllButton } from "./buttons";
+import { approveUnit, seedCurriculum } from "./actions";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, AutopilotButton } from "./buttons";
 import { PillarEditor } from "./curriculum";
+import { SourcePanel } from "./source-panel";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -44,6 +45,16 @@ export default async function Admin() {
           </p>
         </div>
       )}
+
+      <div className="corridor-callout">
+        <strong>Autopilot</strong>
+        <p style={{ margin: "6px 0 10px", color: "var(--color-muted)" }}>
+          Finishes ingestion, generates every not-yet-written topic, scores each, and
+          auto-publishes high-scoring factual units. Interpretive units and weak drafts
+          stay in the queue for you. Keep this tab open while it runs.
+        </p>
+        <AutopilotButton />
+      </div>
 
       {/* 1 — Curriculum */}
       <h2>1 · Curriculum</h2>
@@ -90,31 +101,15 @@ export default async function Admin() {
         runs in small batches: click Ingest, and if pages remain, click again to continue.
         The writer can only cite what is in the corpus.
       </p>
-      <IngestAllButton />
       <AddSourceForm />
-      <ul className="unit-list">
-        {sources.map((s) => {
-          const n = counts[s.id] ?? 0;
-          const custom = s.id.startsWith("custom-");
-          return (
-            <li key={s.id}>
-              <div className="unit-link" style={{ cursor: "default" }}>
-                <span className={`nav-dot ${n > 0 ? "state-published" : "state-planned"}`} aria-hidden />
-                <span className="source-chip">{s.id}</span>
-                <span className="unit-link-q" style={{ fontSize: 14, flex: 1 }}>
-                  {s.body}
-                  <span style={{ color: "var(--color-faint)", marginLeft: 8 }}>
-                    {n > 0 ? `${n} passages` : "not ingested"}
-                  </span>
-                </span>
-                <ActionButton action={ingestStep.bind(null, s.id)} idleLabel={n > 0 ? "Continue" : "Ingest"} busyLabel="Ingesting…" />
-                <ActionButton action={ingestRestart.bind(null, s.id)} idleLabel="Restart" busyLabel="Restarting…" />
-                {custom && <ActionButton action={removeSource.bind(null, s.id)} idleLabel="Delete" busyLabel="…" />}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      <SourcePanel
+        sources={sources.map((s) => ({
+          id: s.id,
+          body: s.body,
+          passages: counts[s.id] ?? 0,
+          custom: s.id.startsWith("custom-"),
+        }))}
+      />
 
       {/* 3 — Approval queue */}
       <h2 style={{ marginTop: 48 }}>3 · Approval queue ({queue.length})</h2>

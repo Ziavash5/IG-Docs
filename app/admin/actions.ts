@@ -16,6 +16,7 @@ import {
   updateTopic,
   deleteTopic,
   reorderTopics,
+  unitStatusBySlug,
   saveUnitBody as dbSaveBody,
   getUnitContent,
   upsertSource,
@@ -204,8 +205,32 @@ async function processSourceBatch(
   return { batch: batch.length, added, complete: after.pending === 0 };
 }
 
-const needsWork = (c: { pending: number; done: number }) =>
-  c.pending > 0 || (c.pending === 0 && c.done === 0);
+const needsWork = (c: { pending: number; done: number }, onlyInProgress = false) =>
+  onlyInProgress ? c.pending > 0 : c.pending > 0 || (c.pending === 0 && c.done === 0);
+
+/** Advance one source by a batch (for client-driven per-source / selected loops). */
+export async function ingestSourceStep(sourceId: string): Promise<StepResult> {
+  const source = (await allSources()).find((s) => s.id === sourceId);
+  if (!source) return { ok: false, done: true, message: "Unknown source." };
+  try {
+    const r = await processSourceBatch(source);
+    revalidatePath("/admin");
+    return { ok: true, done: r.complete, message: `${sourceId}: +${r.added} passages${r.complete ? " (done)" : ""}` };
+  } catch (e) {
+    return { ok: false, done: true, message: errMsg(e) };
+  }
+}
+
+/** Reset a source's corpus + frontier (so the next step starts it fresh). */
+export async function clearSource(sourceId: string): Promise<ActionResult> {
+  try {
+    await clearSourceData(sourceId);
+    revalidatePath("/admin");
+    return { ok: true, message: "Reset." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
 
 /**
  * Resumable ingestion. Each call processes a small batch of pages so a deep source
@@ -228,22 +253,80 @@ export async function ingestStep(sourceId: string): Promise<ActionResult> {
   }
 }
 
-/** One batch across the whole corpus, for the client-driven "ingest all" loop. */
-export async function ingestAllStep(): Promise<StepResult> {
+/**
+ * One batch across the whole corpus, for the client-driven loop. With
+ * onlyInProgress, it resumes started-but-unfinished sources and skips fresh ones.
+ */
+export async function ingestAllStep(onlyInProgress = false): Promise<StepResult> {
   try {
     const sources = await allSources();
     for (const s of sources) {
-      if (needsWork(await queueCounts(s.id))) {
+      if (needsWork(await queueCounts(s.id), onlyInProgress)) {
         const r = await processSourceBatch(s);
         let remaining = false;
         for (const s2 of sources) {
-          if (needsWork(await queueCounts(s2.id))) { remaining = true; break; }
+          if (needsWork(await queueCounts(s2.id), onlyInProgress)) { remaining = true; break; }
         }
         revalidatePath("/admin");
         return { ok: true, done: !remaining, message: `${s.id}: +${r.added} passages${r.complete ? " (done)" : ""}.` };
       }
     }
-    return { ok: true, done: true, message: "All sources ingested." };
+    return { ok: true, done: true, message: onlyInProgress ? "Nothing unfinished." : "All sources ingested." };
+  } catch (e) {
+    return { ok: false, done: true, message: errMsg(e) };
+  }
+}
+
+const AUTOPILOT_MIN_SCORE = 4;
+
+/**
+ * Autopilot: one unit of end-to-end work per call, looped by the client. It finishes
+ * ingestion first, then generates each not-yet-generated topic, self-assesses it, and
+ * auto-publishes only high-scoring FACTUAL units (interpretive always stays gated for a
+ * human). Failures are parked in the queue so they are never retried forever.
+ */
+export async function autopilotStep(): Promise<StepResult> {
+  try {
+    // 1) Finish ingestion before writing anything.
+    const sources = await allSources();
+    for (const s of sources) {
+      if (needsWork(await queueCounts(s.id))) {
+        const r = await processSourceBatch(s);
+        revalidatePath("/admin");
+        return { ok: true, done: false, message: `Ingesting ${s.id} (+${r.added})…` };
+      }
+    }
+
+    // 2) Generate the next topic that has no unit yet.
+    const topics = await listTopics();
+    const statuses = await unitStatusBySlug();
+    const next = topics.find((t) => !statuses[t.slug] || statuses[t.slug] === "planned");
+    if (!next) return { ok: true, done: true, message: "Autopilot complete." };
+
+    await generateUnit(next.slug);
+    const content = await getUnitContent(next.slug);
+    if (!content) {
+      // Generation produced nothing (sources missing): park it so it is not retried.
+      await storeUnit({
+        id: `${CORRIDOR}-${next.slug}`, slug: next.slug, question: next.question,
+        pillar: pillarBySlug(next.pillarSlug)?.n ?? 1, layer: "overlay", corridor: CORRIDOR,
+        jurisdictions: ["CA", "DE"], riskTier: next.riskTier, status: "draft",
+        lastReviewed: new Date().toISOString().slice(0, 10), body: "", claims: [],
+        citations: [], queueReason: "needs-sources",
+      });
+      revalidatePath("/admin");
+      return { ok: true, done: false, message: `${next.slug}: needs sources (parked).` };
+    }
+
+    const v = await assessUnitValue(content.question, content.body ?? "", content.citations);
+    let note = ` (value ${v.score}/5)`;
+    if (content.status === "in_review" && next.riskTier === "factual" && v.score >= AUTOPILOT_MIN_SCORE) {
+      await dbApprove(`${CORRIDOR}-${next.slug}`);
+      note += " auto-published";
+    }
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, done: false, message: `Generated ${next.slug}${note}` };
   } catch (e) {
     return { ok: false, done: true, message: errMsg(e) };
   }
