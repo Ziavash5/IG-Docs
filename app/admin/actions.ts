@@ -12,44 +12,63 @@ import type { Corridor } from "@/lib/question-unit";
 
 const CORRIDOR: Corridor = "dach";
 
-/** Ingest one official source into pgvector (kept small for serverless time limits). */
-export async function ingestOne(sourceId: string): Promise<void> {
+export type ActionResult = { ok: boolean; message: string };
+
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Ingest one official source into pgvector. */
+export async function ingestOne(sourceId: string): Promise<ActionResult> {
   const source = SOURCE_REGISTRY.find((s) => s.id === sourceId);
-  if (!source) return;
+  if (!source) return { ok: false, message: "Unknown source." };
   try {
-    await ingestSource(source);
+    const r = await ingestSource(source);
+    revalidatePath("/admin");
+    return r.chunks > 0
+      ? { ok: true, message: `Ingested ${r.chunks} passages.` }
+      : { ok: false, message: "Fetched, but no usable text (source may block bots or be JS-rendered)." };
   } catch (e) {
-    console.error("ingestOne failed:", e);
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
-  revalidatePath("/admin");
 }
 
-/** Ingest the whole registry (may exceed the time limit on small plans). */
-export async function ingestEverything(): Promise<void> {
+/** Ingest the whole registry. Likely to exceed the 60s limit on Vercel Hobby. */
+export async function ingestEverything(): Promise<ActionResult> {
   try {
-    await ingestAll();
+    const results = await ingestAll();
+    const ok = results.filter((r) => r.chunks > 0);
+    const total = results.reduce((a, r) => a + r.chunks, 0);
+    const failed = results.filter((r) => r.chunks === 0).map((r) => r.sourceId);
+    revalidatePath("/admin");
+    return {
+      ok: ok.length > 0,
+      message:
+        `Ingested ${ok.length}/${results.length} sources (${total} passages).` +
+        (failed.length ? ` No text from: ${failed.join(", ")}.` : ""),
+    };
   } catch (e) {
-    console.error("ingestEverything failed:", e);
+    return { ok: false, message: `Failed (likely a 60s timeout — ingest per-source): ${errMsg(e)}` };
   }
-  revalidatePath("/admin");
 }
 
 /**
  * Generate a unit end-to-end: corridor-aware retrieval → cited draft → dual-retrieval
- * verification → either auto-publish (factual + all agree) or route to the queue.
+ * verification → auto-publish (factual + all agree) or route to the queue.
  */
 export async function generateUnit(
   stage: string,
   pillarSlug: string,
   unitSlug: string,
-): Promise<void> {
+): Promise<ActionResult> {
   const found = findUnit(stage, pillarSlug, unitSlug);
-  if (!found) return;
+  if (!found) return { ok: false, message: "Unknown unit." };
   const { pillar, unit } = found;
 
   try {
     const sourceIds = await selectSources(unit.question, CORRIDOR);
     const spans = await retrieveSpans(unit.question, sourceIds);
+    if (spans.length === 0) {
+      return { ok: false, message: "No source passages retrieved — ingest the relevant sources first." };
+    }
     const draft = await writeUnit({
       question: unit.question,
       corridor: CORRIDOR,
@@ -57,11 +76,13 @@ export async function generateUnit(
       riskTier: unit.riskTier,
       spans,
     });
+    if (draft.claims.length === 0) {
+      return { ok: false, message: "Draft produced no source-grounded claims. Try ingesting more sources." };
+    }
 
     const verdict = await verifyClaims(draft.claims, sourceIds, unit.riskTier);
     const decision = route(unit.riskTier, verdict);
 
-    // Mark claims verified where both passes agreed.
     const claims = draft.claims.map((c, i) => ({
       text: c.text,
       sourceId: c.sourceId,
@@ -102,18 +123,27 @@ export async function generateUnit(
       citations: [...new Set(claims.map((c) => c.sourceId))],
       queueReason,
     });
+
+    revalidatePath("/admin");
+    return {
+      ok: true,
+      message:
+        decision === "auto-ship"
+          ? `Published automatically (${claims.length} claims, all verified).`
+          : `Drafted ${claims.length} claims → sent to the review queue (${queueReason}).`,
+    };
   } catch (e) {
-    console.error("generateUnit failed:", e);
+    return { ok: false, message: `Failed (Opus runs can exceed 60s on Hobby): ${errMsg(e)}` };
   }
-  revalidatePath("/admin");
 }
 
 /** Operator approval — verify claims, publish, resolve the queue entry. */
-export async function approveUnit(unitId: string): Promise<void> {
+export async function approveUnit(unitId: string): Promise<ActionResult> {
   try {
     await dbApprove(unitId);
+    revalidatePath("/admin");
+    return { ok: true, message: "Published." };
   } catch (e) {
-    console.error("approveUnit failed:", e);
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
-  revalidatePath("/admin");
 }

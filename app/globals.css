@@ -333,6 +333,11 @@ p { margin: 14px 0; }
 .ghost-btn:hover { border-color: var(--color-brand); color: var(--color-brand); }
 .book-call-btn { border: none; cursor: pointer; font-size: 14px; }
 
+.action-cell { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.action-msg { font-size: 13px; }
+.action-msg.ok { color: #1f7a47; }
+.action-msg.err { color: #b0473f; }
+
 .claim-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
 .claim-table th {
   text-align: left;

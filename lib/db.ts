@@ -174,3 +174,12 @@ export async function ingestStats(): Promise<{ sources: number; chunks: number }
   const [c] = await db`select count(*)::int as n from chunks`;
   return { sources: Number(s.n), chunks: Number(c.n) };
 }
+
+/** Passage count per source id, for showing ingest status in the console. */
+export async function sourceChunkCounts(): Promise<Record<string, number>> {
+  const db = sql();
+  const rows = await db`select source_id, count(*)::int as n from chunks group by source_id`;
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.source_id as string] = Number(r.n);
+  return out;
+}
