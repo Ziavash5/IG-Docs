@@ -1,0 +1,176 @@
+import postgres from "postgres";
+import type { Source, Chunk, RetrievedSpan } from "./pipeline/types";
+
+/**
+ * Postgres + pgvector access. The client is lazily created so `next build`
+ * succeeds without DATABASE_URL — it's only needed at request time on the server.
+ * `prepare: false` is required for Supabase's transaction pooler (PgBouncer).
+ */
+let _sql: ReturnType<typeof postgres> | null = null;
+
+export function sql() {
+  if (!_sql) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is not set");
+    _sql = postgres(url, { prepare: false });
+  }
+  return _sql;
+}
+
+const vec = (embedding: number[]) => `[${embedding.join(",")}]`;
+
+export async function upsertSource(s: Source): Promise<void> {
+  const db = sql();
+  await db`
+    insert into sources (id, body, url, corridor, last_checked)
+    values (${s.id}, ${s.body}, ${s.url}, ${s.corridor}, now())
+    on conflict (id) do update set
+      body = excluded.body, url = excluded.url,
+      corridor = excluded.corridor, last_checked = now()
+  `;
+}
+
+export async function replaceChunks(
+  sourceId: string,
+  chunks: { text: string; locator: string; embedding: number[] }[],
+): Promise<number> {
+  const db = sql();
+  await db`delete from chunks where source_id = ${sourceId}`;
+  for (const c of chunks) {
+    await db`
+      insert into chunks (source_id, text, locator, embedding)
+      values (${sourceId}, ${c.text}, ${c.locator}, ${vec(c.embedding)}::vector)
+    `;
+  }
+  return chunks.length;
+}
+
+/** Cosine-similarity search over the chunks of the given sources. */
+export async function searchChunks(
+  queryEmbedding: number[],
+  sourceIds: string[],
+  k = 8,
+): Promise<RetrievedSpan[]> {
+  if (sourceIds.length === 0) return [];
+  const db = sql();
+  const rows = await db`
+    select id, source_id, text, locator,
+           1 - (embedding <=> ${vec(queryEmbedding)}::vector) as score
+    from chunks
+    where source_id in ${db(sourceIds)} and embedding is not null
+    order by embedding <=> ${vec(queryEmbedding)}::vector
+    limit ${k}
+  `;
+  return rows.map((r) => ({
+    chunk: {
+      id: String(r.id),
+      sourceId: r.source_id as string,
+      text: r.text as string,
+      locator: r.locator as string,
+    } as Chunk,
+    score: Number(r.score),
+  }));
+}
+
+export interface StoredUnitInput {
+  id: string;
+  slug: string;
+  question: string;
+  pillar: number;
+  layer: "base" | "overlay";
+  corridor: string;
+  jurisdictions: string[];
+  riskTier: "factual" | "interpretive";
+  status: "draft" | "in_review" | "published";
+  lastReviewed: string;
+  cta?: string;
+  body?: string;
+  claims: { text: string; sourceId: string; locator: string; verified: boolean }[];
+  citations: string[];
+  queueReason?: string;
+}
+
+export async function storeUnit(u: StoredUnitInput): Promise<void> {
+  const db = sql();
+  await db`
+    insert into units (id, slug, question, pillar, layer, corridor, jurisdictions,
+                       risk_tier, status, last_reviewed, cta, body, updated_at)
+    values (${u.id}, ${u.slug}, ${u.question}, ${u.pillar}, ${u.layer}, ${u.corridor},
+            ${db.array(u.jurisdictions)}, ${u.riskTier}, ${u.status}, ${u.lastReviewed},
+            ${u.cta ?? null}, ${u.body ?? null}, now())
+    on conflict (id) do update set
+      question = excluded.question, status = excluded.status,
+      body = excluded.body, last_reviewed = excluded.last_reviewed, updated_at = now()
+  `;
+  await db`delete from claims where unit_id = ${u.id}`;
+  for (const c of u.claims) {
+    await db`
+      insert into claims (unit_id, text, source_id, locator, verified)
+      values (${u.id}, ${c.text}, ${c.sourceId}, ${c.locator}, ${c.verified})
+    `;
+  }
+  if (u.queueReason) {
+    await db`
+      insert into review_queue (unit_id, reason) values (${u.id}, ${u.queueReason})
+    `;
+  }
+}
+
+export interface QueueRow {
+  queueId: string;
+  unitId: string;
+  slug: string;
+  question: string;
+  riskTier: string;
+  reason: string;
+  createdAt: string;
+  claims: { text: string; sourceId: string; locator: string; verified: boolean }[];
+}
+
+export async function openQueue(): Promise<QueueRow[]> {
+  const db = sql();
+  const rows = await db`
+    select q.id as queue_id, q.unit_id, q.reason, q.created_at,
+           u.slug, u.question, u.risk_tier
+    from review_queue q join units u on u.id = q.unit_id
+    where q.resolved_at is null
+    order by q.created_at desc
+  `;
+  const out: QueueRow[] = [];
+  for (const r of rows) {
+    const claims = await db`
+      select text, source_id, locator, verified from claims where unit_id = ${r.unit_id}
+    `;
+    out.push({
+      queueId: String(r.queue_id),
+      unitId: r.unit_id as string,
+      slug: r.slug as string,
+      question: r.question as string,
+      riskTier: r.risk_tier as string,
+      reason: r.reason as string,
+      createdAt: String(r.created_at),
+      claims: claims.map((c) => ({
+        text: c.text as string,
+        sourceId: c.source_id as string,
+        locator: c.locator as string,
+        verified: c.verified as boolean,
+      })),
+    });
+  }
+  return out;
+}
+
+/** Operator approval: verify all claims, publish the unit, resolve the queue entry. */
+export async function approveUnit(unitId: string): Promise<void> {
+  const db = sql();
+  await db`update claims set verified = true where unit_id = ${unitId}`;
+  await db`update units set status = 'published', updated_at = now() where id = ${unitId}`;
+  await db`update review_queue set resolved_at = now() where unit_id = ${unitId} and resolved_at is null`;
+}
+
+export async function ingestStats(): Promise<{ sources: number; chunks: number }> {
+  const db = sql();
+  const [s] = await db`select count(*)::int as n from sources`;
+  const [c] = await db`select count(*)::int as n from chunks`;
+  return { sources: Number(s.n), chunks: Number(c.n) };
+}

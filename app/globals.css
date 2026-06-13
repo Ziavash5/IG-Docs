@@ -260,6 +260,36 @@ p { margin: 14px 0; }
 }
 .book-call-btn:hover { background: #b07f3f; text-decoration: none; }
 
+/* ---- Admin console -------------------------------------------------------- */
+.ghost-btn {
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ghost-btn:hover { border-color: var(--color-brand); color: var(--color-brand); }
+.book-call-btn { border: none; cursor: pointer; font-size: 14px; }
+
+.claim-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+.claim-table th {
+  text-align: left;
+  font-family: var(--font-head);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-faint);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-line);
+}
+.claim-table td { padding: 8px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+.claim-table td:nth-child(3) { text-align: center; color: #2f9e5e; }
+
 /* ---- Responsive ----------------------------------------------------------- */
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
