@@ -146,8 +146,9 @@ export default async function Admin() {
               was not ingested. Ingest the right source (section 2) and regenerate.
             </p>
           )}
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
             <ActionButton action={approveUnit.bind(null, row.unitId)} idleLabel="Approve & publish" busyLabel="Publishing…" variant="primary" />
+            <a className="ghost-btn" href={`/admin/edit/${row.slug}`}>Edit content</a>
           </div>
         </div>
       ))}

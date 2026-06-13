@@ -14,7 +14,10 @@ import {
   insertTopic,
   updateTopic,
   deleteTopic,
+  saveUnitBody as dbSaveBody,
+  getUnitContent,
 } from "@/lib/db";
+import { anthropic, MODEL, textOf } from "@/lib/anthropic";
 import { seedDefaults, suggestTopics, type SuggestedTopic } from "@/lib/curriculum";
 import type { Corridor, RiskTier } from "@/lib/question-unit";
 
@@ -220,6 +223,72 @@ export async function generateUnit(topicSlug: string): Promise<ActionResult> {
     };
   } catch (e) {
     return { ok: false, message: `Failed (Opus runs can exceed 60s on Hobby): ${errMsg(e)}` };
+  }
+}
+
+// ---- Content editing + grounded AI assist -----------------------------------
+
+export async function saveUnitBody(slug: string, body: string): Promise<ActionResult> {
+  try {
+    await dbSaveBody(slug, body);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Saved." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/**
+ * Grounded AI writing assist for the editor. Retrieves the unit's source spans and
+ * rewrites a selection or drafts a new passage using ONLY those spans — same
+ * no-hallucination contract as the writer. Returns plain text to drop into the editor.
+ */
+export async function aiAssist(
+  slug: string,
+  instruction: string,
+  selectedText: string,
+): Promise<{ ok: boolean; text?: string; message?: string }> {
+  try {
+    const unit = await getUnitContent(slug);
+    if (!unit) return { ok: false, message: "Unit not found." };
+
+    const sourceIds = await selectSources(unit.question, CORRIDOR);
+    const spans = await retrieveSpans(unit.question, sourceIds, 8);
+    if (spans.length === 0) {
+      return { ok: false, message: "No source passages available — ingest the relevant sources first." };
+    }
+    const spanList = spans
+      .map((s, i) => `[span ${i}] sourceId=${s.chunk.sourceId}\n${s.chunk.text}`)
+      .join("\n\n");
+
+    const msg = await anthropic().messages.create({
+      model: MODEL,
+      max_tokens: 2000,
+      thinking: { type: "adaptive" },
+      system:
+        "You are an editing assistant for authoritative cross-border guidance. You may use " +
+        "ONLY the provided official source spans. Never invent figures, thresholds, sections, " +
+        "or rules; if the spans do not support something, do not write it. No meta-commentary " +
+        "('general information only', mentions of sources or AI, etc.). Match the existing " +
+        "clear, specific, plain-English voice. Return ONLY the passage text — no preamble, no " +
+        "JSON, no quotes around it.",
+      messages: [
+        {
+          role: "user",
+          content:
+            `Question this unit answers: ${unit.question}\n\n` +
+            `Official source spans you may use:\n${spanList}\n\n` +
+            (selectedText
+              ? `Rewrite this passage per the instruction below:\n"""${selectedText}"""\n\n`
+              : "") +
+            `Instruction: ${instruction}\n\nReturn only the resulting passage text.`,
+        },
+      ],
+    });
+    return { ok: true, text: textOf(msg).trim() };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
 }
 

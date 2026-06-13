@@ -274,6 +274,11 @@ export async function getUnitContent(slug: string): Promise<PublicUnit | null> {
   };
 }
 
+export async function saveUnitBody(slug: string, body: string): Promise<void> {
+  const db = sql();
+  await db`update units set body = ${body}, updated_at = now() where slug = ${slug}`;
+}
+
 /** Passage count per source id, for showing ingest status in the console. */
 export async function sourceChunkCounts(): Promise<Record<string, number>> {
   const db = sql();

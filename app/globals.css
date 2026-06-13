@@ -358,6 +358,29 @@ p { margin: 14px 0; }
 .action-msg.ok { color: #1f7a47; }
 .action-msg.err { color: #b0473f; }
 
+.editor { padding: 8px 0 60px; }
+.assist-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
+.assist-input {
+  flex: 1;
+  min-width: 240px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.editor-area {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  resize: vertical;
+}
+.editor-area:focus, .assist-input:focus { outline: none; border-color: var(--color-brand); }
+
 .draft-preview { margin: 10px 0; }
 .draft-preview summary { cursor: pointer; font-family: var(--font-head); font-size: 13px; font-weight: 600; color: var(--color-brand); }
 .draft-preview pre {

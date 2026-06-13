@@ -84,7 +84,10 @@ export function PillarEditor({
                   <span style={{ color: "var(--color-faint)", marginLeft: 8 }}>{stateLabel[u.state] ?? u.state}</span>
                 </span>
                 <button className="ghost-btn" disabled={pending} onClick={() => run(() => generateUnit(u.slug))}>Generate</button>
-                <button className="ghost-btn" onClick={() => { setEditing(u.slug); setEdit({ title: u.title, question: u.question, riskTier: u.riskTier }); }}>Edit</button>
+                {u.state !== "planned" && (
+                  <a className="ghost-btn" href={`/admin/edit/${u.slug}`}>Edit content</a>
+                )}
+                <button className="ghost-btn" onClick={() => { setEditing(u.slug); setEdit({ title: u.title, question: u.question, riskTier: u.riskTier }); }}>Rename</button>
                 <button className="ghost-btn" disabled={pending} onClick={() => run(() => removeTopic(u.slug))}>Delete</button>
               </div>
             )}
