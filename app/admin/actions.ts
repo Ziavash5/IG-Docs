@@ -115,7 +115,7 @@ export async function ingestOne(sourceId: string): Promise<ActionResult> {
     const r = await ingestSource(source);
     revalidatePath("/admin");
     return r.chunks > 0
-      ? { ok: true, message: `Ingested ${r.chunks} passages.` }
+      ? { ok: true, message: `Ingested ${r.chunks} passages from ${r.pages} page(s).` }
       : { ok: false, message: "Fetched, but no usable text (source may block bots or be JS-rendered)." };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };

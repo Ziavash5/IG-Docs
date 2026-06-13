@@ -7,8 +7,13 @@
 export interface Source {
   id: string;
   body: string;
+  /** Primary landing page. */
   url: string;
   corridor: import("../question-unit").Corridor;
+  /** Extra seed pages to ingest in addition to `url` (e.g. a statute's full text). */
+  urls?: string[];
+  /** Follow links under `prefix` (same origin) up to `max` pages, for deep coverage. */
+  crawl?: { prefix: string; max: number };
   /** Last time the freshness loop confirmed this source unchanged. */
   lastChecked?: string;
 }
