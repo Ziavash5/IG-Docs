@@ -1,8 +1,46 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { ActionResult } from "./actions";
-import { assessUnit, generateUnit, addSource } from "./actions";
+import { assessUnit, generateUnit, addSource, ingestAllStep } from "./actions";
+
+/** Ingest the whole corpus by looping the queue one batch at a time (with Stop). */
+export function IngestAllButton() {
+  const [running, setRunning] = useState(false);
+  const [msg, setMsg] = useState("");
+  const stop = useRef(false);
+  const router = useRouter();
+
+  const run = async () => {
+    setRunning(true);
+    stop.current = false;
+    let steps = 0;
+    try {
+      while (!stop.current) {
+        const r = await ingestAllStep();
+        setMsg(r.message);
+        if (++steps % 3 === 0) router.refresh();
+        if (r.done || !r.ok) break;
+        await new Promise((res) => setTimeout(res, 300));
+      }
+    } finally {
+      setRunning(false);
+      router.refresh();
+    }
+  };
+
+  return (
+    <div className="assist-bar" style={{ margin: "12px 0" }}>
+      {running ? (
+        <button type="button" className="ghost-btn" onClick={() => (stop.current = true)}>Stop</button>
+      ) : (
+        <button type="button" className="book-call-btn" onClick={run}>Ingest all (queued)</button>
+      )}
+      {msg && <span className="action-msg ok">{running ? `Working… ${msg}` : msg}</span>}
+    </div>
+  );
+}
 
 /** Add your own official source by URL. */
 export function AddSourceForm() {

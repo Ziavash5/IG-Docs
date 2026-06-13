@@ -167,6 +167,46 @@ export async function checkQuality(
 
 const STEP_PAGES = 5;
 
+export type StepResult = { ok: boolean; done: boolean; message: string };
+
+/** Seed-if-fresh, then process one batch of pages for a source. */
+async function processSourceBatch(
+  source: import("@/lib/pipeline/types").Source,
+): Promise<{ batch: number; added: number; complete: boolean }> {
+  const counts = await queueCounts(source.id);
+  if (counts.pending === 0 && counts.done === 0) {
+    await clearSourceData(source.id);
+    await upsertSource(source);
+    const seeds = source.urls?.length ? [source.url, ...source.urls] : [source.url];
+    await seedIngestQueue(source.id, [...new Set(seeds)]);
+  } else if (counts.pending === 0) {
+    return { batch: 0, added: 0, complete: true };
+  }
+
+  const max = source.crawl?.max ?? 3;
+  const batch = await nextPending(source.id, STEP_PAGES);
+  let added = 0;
+  for (const item of batch) {
+    const page = await fetchPage(item.url);
+    await markQueueDone(item.id);
+    if (!page || page.text.length < 200) continue;
+    const chunks = chunkPage(source.id, item.url, page.text);
+    if (chunks.length) {
+      const emb = await embedDocuments(chunks.map((c) => c.text));
+      await insertChunks(source.id, chunks.map((c, i) => ({ text: c.text, locator: c.locator, embedding: emb[i] })));
+      added += chunks.length;
+    }
+    if (source.crawl) {
+      await addPending(source.id, page.links.filter((l) => l.startsWith(source.crawl!.prefix)), max);
+    }
+  }
+  const after = await queueCounts(source.id);
+  return { batch: batch.length, added, complete: after.pending === 0 };
+}
+
+const needsWork = (c: { pending: number; done: number }) =>
+  c.pending > 0 || (c.pending === 0 && c.done === 0);
+
 /**
  * Resumable ingestion. Each call processes a small batch of pages so a deep source
  * ingests across several clicks without timing out. Click again while pages remain.
@@ -174,48 +214,38 @@ const STEP_PAGES = 5;
 export async function ingestStep(sourceId: string): Promise<ActionResult> {
   const source = (await allSources()).find((s) => s.id === sourceId);
   if (!source) return { ok: false, message: "Unknown source." };
-
   try {
-    const counts = await queueCounts(sourceId);
-    if (counts.pending === 0 && counts.done === 0) {
-      // Fresh start: reset and seed the frontier with the source's seed pages.
-      await clearSourceData(sourceId);
-      await upsertSource(source);
-      const seeds = source.urls?.length ? [source.url, ...source.urls] : [source.url];
-      await seedIngestQueue(sourceId, [...new Set(seeds)]);
-    } else if (counts.pending === 0) {
-      return { ok: true, message: "Already complete. Use Restart to re-ingest." };
-    }
-
-    const max = source.crawl?.max ?? 3;
-    const batch = await nextPending(sourceId, STEP_PAGES);
-    let added = 0;
-    for (const item of batch) {
-      const page = await fetchPage(item.url);
-      await markQueueDone(item.id);
-      if (!page || page.text.length < 200) continue;
-      const chunks = chunkPage(sourceId, item.url, page.text);
-      if (chunks.length) {
-        const emb = await embedDocuments(chunks.map((c) => c.text));
-        await insertChunks(sourceId, chunks.map((c, i) => ({ text: c.text, locator: c.locator, embedding: emb[i] })));
-        added += chunks.length;
-      }
-      if (source.crawl) {
-        await addPending(sourceId, page.links.filter((l) => l.startsWith(source.crawl!.prefix)), max);
-      }
-    }
-
-    const after = await queueCounts(sourceId);
+    const r = await processSourceBatch(source);
     revalidatePath("/admin");
     return {
       ok: true,
-      message:
-        after.pending > 0
-          ? `Ingested ${batch.length} page(s), +${added} passages. ${after.pending} pending — click Ingest to continue.`
-          : `Done. ${after.done} page(s) ingested.`,
+      message: r.complete
+        ? `Done. ${r.added > 0 ? `+${r.added} passages.` : ""}`.trim()
+        : `Ingested ${r.batch} page(s), +${r.added} passages. Click Continue for the rest.`,
     };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** One batch across the whole corpus, for the client-driven "ingest all" loop. */
+export async function ingestAllStep(): Promise<StepResult> {
+  try {
+    const sources = await allSources();
+    for (const s of sources) {
+      if (needsWork(await queueCounts(s.id))) {
+        const r = await processSourceBatch(s);
+        let remaining = false;
+        for (const s2 of sources) {
+          if (needsWork(await queueCounts(s2.id))) { remaining = true; break; }
+        }
+        revalidatePath("/admin");
+        return { ok: true, done: !remaining, message: `${s.id}: +${r.added} passages${r.complete ? " (done)" : ""}.` };
+      }
+    }
+    return { ok: true, done: true, message: "All sources ingested." };
+  } catch (e) {
+    return { ok: false, done: true, message: errMsg(e) };
   }
 }
 

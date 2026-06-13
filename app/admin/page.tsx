@@ -2,7 +2,7 @@ import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { allSources } from "@/lib/sources-registry";
 import { openQueue, ingestStats, sourceChunkCounts, type QueueRow } from "@/lib/db";
 import { approveUnit, ingestStep, ingestRestart, removeSource, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm } from "./buttons";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, IngestAllButton } from "./buttons";
 import { PillarEditor } from "./curriculum";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +90,7 @@ export default async function Admin() {
         runs in small batches: click Ingest, and if pages remain, click again to continue.
         The writer can only cite what is in the corpus.
       </p>
+      <IngestAllButton />
       <AddSourceForm />
       <ul className="unit-list">
         {sources.map((s) => {
