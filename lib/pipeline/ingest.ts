@@ -50,20 +50,78 @@ function extractText(html: string): string {
   return clean(html);
 }
 
-/** Same-origin links under `prefix`, for crawling a topic tree. */
-function extractLinks(html: string, baseUrl: string, prefix: string): string[] {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Absolute links found in raw HTML. */
+function htmlLinks(html: string, baseUrl: string): string[] {
   const out = new Set<string>();
   const re = /href\s*=\s*["']([^"'#]+)/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
     try {
-      const u = new URL(m[1], baseUrl).toString().split("#")[0];
-      if (u.startsWith(prefix)) out.add(u);
+      out.add(new URL(m[1], baseUrl).toString().split("#")[0]);
     } catch {
-      /* skip malformed */
+      /* skip */
     }
   }
   return [...out];
+}
+
+/** Absolute links found in reader markdown. */
+function markdownLinks(md: string): string[] {
+  const out = new Set<string>();
+  const re = /\((https?:\/\/[^)\s]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(md))) out.add(m[1].split("#")[0]);
+  return [...out];
+}
+
+/** Fast path: a direct browser-like fetch. Returns null if blocked or thin. */
+async function fetchDirect(url: string): Promise<{ text: string; links: string[] } | null> {
+  try {
+    const res = await fetch(url, { headers: FETCH_HEADERS });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const text = extractText(html);
+    if (text.length < 300) return null;
+    return { text, links: htmlLinks(html, url) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Robust path: Jina Reader renders the page (JS + bot-managed sites) and returns clean
+ * content. Free anonymously; set JINA_API_KEY for higher limits. Retries on rate limits.
+ */
+async function fetchReader(
+  url: string,
+  attempt = 0,
+): Promise<{ text: string; links: string[] } | null> {
+  const key = process.env.JINA_API_KEY;
+  const headers: Record<string, string> = {
+    accept: "text/plain",
+    "x-with-links-summary": "true",
+  };
+  if (key) headers.authorization = `Bearer ${key}`;
+  try {
+    const res = await fetch(`https://r.jina.ai/${url}`, { headers });
+    if (res.status === 429 && attempt < 4) {
+      await sleep(2 ** attempt * 3000);
+      return fetchReader(url, attempt + 1);
+    }
+    if (!res.ok) return null;
+    const md = await res.text();
+    if (md.length < 200) return null;
+    return { text: md, links: markdownLinks(md) };
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch one page robustly: direct first, then the rendering reader. */
+async function fetchPage(url: string): Promise<{ text: string; links: string[] } | null> {
+  return (await fetchDirect(url)) ?? (await fetchReader(url));
 }
 
 /** Fetch the seed pages plus (if configured) crawled sub-pages. */
@@ -78,21 +136,18 @@ async function collectPages(source: Source): Promise<{ url: string; text: string
     const url = queue.shift()!;
     if (visited.has(url)) continue;
     visited.add(url);
-    let html: string;
-    try {
-      const res = await fetch(url, { headers: FETCH_HEADERS });
-      if (!res.ok) continue;
-      html = await res.text();
-    } catch {
-      continue;
-    }
-    const text = extractText(html);
-    if (text.length > 200) pages.push({ url, text });
+    const page = await fetchPage(url);
+    if (!page) continue;
+    if (page.text.length > 200) pages.push({ url, text: page.text });
     if (source.crawl) {
-      for (const link of extractLinks(html, url, source.crawl.prefix)) {
-        if (!visited.has(link) && queue.length + pages.length < max) queue.push(link);
+      for (const link of page.links) {
+        if (link.startsWith(source.crawl.prefix) && !visited.has(link) &&
+            queue.length + pages.length < max) {
+          queue.push(link);
+        }
       }
     }
+    await sleep(300);
   }
   return pages;
 }

@@ -23,6 +23,8 @@ export interface WriteRequest {
   pillar: Pillar;
   riskTier: "factual" | "interpretive";
   spans: RetrievedSpan[];
+  /** Optional operator instruction for a steered regeneration. */
+  guidance?: string;
 }
 
 interface RawDraft {
@@ -77,6 +79,7 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
         content:
           `Question: ${req.question}\nCorridor: ${req.corridor}\nPillar: ${req.pillar}\n` +
           `Risk tier: ${req.riskTier}\n\nRetrieved official source spans:\n${spanList}\n\n` +
+          (req.guidance ? `Operator guidance (prioritise this, but stay grounded in the sources): ${req.guidance}\n\n` : "") +
           `Return JSON with this shape:\n` +
           `{"directAnswer": "...", "sections": [{"heading": "...", "body": "..."}], ` +
           `"corridorDelta": "...", "checklist": ["..."], ` +

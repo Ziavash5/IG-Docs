@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { saveUnitBody, aiAssist } from "./actions";
+import { AssessButton, RegenerateBox } from "./buttons";
 
 /**
  * Content editor. Edit the body directly, or select a passage and have AI rewrite it,
@@ -85,6 +86,14 @@ export function UnitEditor({ slug, question, initialBody }: { slug: string; ques
         AI edits are written only from this unit&rsquo;s official sources. Saving updates the
         live page. Markdown: use <code>##</code> for headings and <code>-</code> for lists.
       </p>
+
+      <hr style={{ border: "none", borderTop: "1px solid var(--color-line)", margin: "24px 0" }} />
+      <p className="card-n">Regenerate or assess</p>
+      <RegenerateBox slug={slug} />
+      <p style={{ color: "var(--color-faint)", fontSize: 13, margin: "4px 0 14px" }}>
+        Regenerating overwrites the body from the sources. Reload to see the new draft.
+      </p>
+      <AssessButton slug={slug} />
     </div>
   );
 }

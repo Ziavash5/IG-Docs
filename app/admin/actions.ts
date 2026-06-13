@@ -192,7 +192,7 @@ export async function ingestEverything(): Promise<ActionResult> {
  * Generate a unit end-to-end: corridor-aware retrieval → cited draft → dual-retrieval
  * verification → auto-publish (factual + all agree) or route to the queue.
  */
-export async function generateUnit(topicSlug: string): Promise<ActionResult> {
+export async function generateUnit(topicSlug: string, guidance?: string): Promise<ActionResult> {
   const topic = (await listTopics()).find((t) => t.slug === topicSlug);
   if (!topic) return { ok: false, message: "Unknown topic." };
   const pillar = pillarBySlug(topic.pillarSlug);
@@ -210,6 +210,7 @@ export async function generateUnit(topicSlug: string): Promise<ActionResult> {
       pillar: pillar.n as 1 | 2 | 3 | 4 | 5 | 6 | 7,
       riskTier: topic.riskTier,
       spans,
+      guidance,
     });
     if (draft.claims.length === 0) {
       return { ok: false, message: "Draft produced no source-grounded claims. Try ingesting more sources." };

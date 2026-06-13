@@ -52,3 +52,30 @@ export async function embedQuery(text: string): Promise<number[]> {
   const [e] = await embedBatch([text], "query");
   return e;
 }
+
+const RERANK_URL = "https://api.voyageai.com/v1/rerank";
+
+/** Rerank documents against a query; returns document indices in relevance order. */
+export async function rerank(
+  query: string,
+  documents: string[],
+  topK: number,
+  attempt = 0,
+): Promise<number[]> {
+  const key = process.env.VOYAGE_API_KEY;
+  if (!key) throw new Error("VOYAGE_API_KEY is not set");
+
+  const res = await fetch(RERANK_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    body: JSON.stringify({ query, documents, model: "rerank-2", top_k: topK }),
+  });
+  if (res.status === 429 && attempt < 5) {
+    const ra = Number(res.headers.get("retry-after"));
+    await sleep((Number.isFinite(ra) && ra > 0 ? ra : 2 ** attempt * 4) * 1000);
+    return rerank(query, documents, topK, attempt + 1);
+  }
+  if (!res.ok) throw new Error(`Voyage rerank ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as { results: { index: number }[] };
+  return json.results.map((r) => r.index);
+}

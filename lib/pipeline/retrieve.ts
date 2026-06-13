@@ -1,7 +1,7 @@
 import type { Corridor } from "../question-unit";
 import type { RetrievedSpan } from "./types";
 import { anthropic, MODEL, textOf, parseJson } from "../anthropic";
-import { embedQuery } from "../voyage";
+import { embedQuery, rerank } from "../voyage";
 import { searchChunks } from "../db";
 import { candidatesFor } from "../sources-registry";
 
@@ -48,5 +48,13 @@ export async function retrieveSpans(
   k = 8,
 ): Promise<RetrievedSpan[]> {
   const embedding = await embedQuery(question);
-  return searchChunks(embedding, sourceIds, k);
+  // Over-fetch by vector similarity, then rerank for precision (sharper, more even).
+  const candidates = await searchChunks(embedding, sourceIds, Math.max(k * 3, 24));
+  if (candidates.length <= k) return candidates;
+  try {
+    const order = await rerank(question, candidates.map((c) => c.chunk.text), k);
+    return order.map((i) => candidates[i]).filter(Boolean);
+  } catch {
+    return candidates.slice(0, k);
+  }
 }

@@ -52,6 +52,12 @@ export const SOURCE_REGISTRY: Source[] = [
   { id: "de-estg-kstg", body: "Körperschaftsteuergesetz (DE) — German corporate tax (full text)", corridor: "dach",
     url: "https://www.gesetze-im-internet.de/kstg_1977/",
     crawl: { prefix: "https://www.gesetze-im-internet.de/kstg_1977/", max: 25 } },
+  { id: "de-estg", body: "Einkommensteuergesetz (DE) — German income tax (full text)", corridor: "dach",
+    url: "https://www.gesetze-im-internet.de/estg/",
+    crawl: { prefix: "https://www.gesetze-im-internet.de/estg/", max: 30 } },
+  { id: "de-ustg", body: "Umsatzsteuergesetz (DE) — German VAT (full text)", corridor: "dach",
+    url: "https://www.gesetze-im-internet.de/ustg_1980/",
+    crawl: { prefix: "https://www.gesetze-im-internet.de/ustg_1980/", max: 25 } },
 ];
 
 /** Candidate sources for a corridor: base layer + that corridor's overlay. */

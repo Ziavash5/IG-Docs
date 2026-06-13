@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { ActionResult } from "./actions";
-import { assessUnit } from "./actions";
+import { assessUnit, generateUnit } from "./actions";
 
 /**
  * Runs a (bound) server action with visible pending + result state. A 60s Vercel Hobby
@@ -47,6 +47,42 @@ export function ActionButton({
       </button>
       {res && <span className={`action-msg ${res.ok ? "ok" : "err"}`}>{res.message}</span>}
     </span>
+  );
+}
+
+/** Regenerate a unit from its sources with an operator instruction. */
+export function RegenerateBox({ slug }: { slug: string }) {
+  const [instruction, setInstruction] = useState("");
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState("");
+
+  return (
+    <div className="assist-bar" style={{ marginTop: 10 }}>
+      <input
+        className="assist-input"
+        placeholder="Regenerate with an instruction (e.g. lead with the small-supplier threshold)…"
+        value={instruction}
+        onChange={(e) => setInstruction(e.target.value)}
+      />
+      <button
+        type="button"
+        className="ghost-btn"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            setMsg("Regenerating from sources…");
+            try {
+              setMsg((await generateUnit(slug, instruction || undefined)).message);
+            } catch {
+              setMsg("Failed (timeout?).");
+            }
+          })
+        }
+      >
+        {pending ? "Regenerating…" : "Regenerate"}
+      </button>
+      {msg && <span className="action-msg ok">{msg}</span>}
+    </div>
   );
 }
 
