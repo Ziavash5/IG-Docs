@@ -1,8 +1,8 @@
 import { getCurriculum, isSeeded } from "@/lib/curriculum";
-import { SOURCE_REGISTRY } from "@/lib/sources-registry";
+import { allSources } from "@/lib/sources-registry";
 import { openQueue, ingestStats, sourceChunkCounts, type QueueRow } from "@/lib/db";
-import { approveUnit, ingestOne, ingestEverything, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox } from "./buttons";
+import { approveUnit, ingestStep, ingestRestart, removeSource, seedCurriculum } from "./actions";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm } from "./buttons";
 import { PillarEditor } from "./curriculum";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +16,7 @@ export default async function Admin() {
   let counts: Record<string, number> = {};
   let journey = await getCurriculum();
   let seeded = await isSeeded();
+  let sources = await allSources();
   let dbError: string | null = null;
   try {
     [stats, queue, counts] = await Promise.all([ingestStats(), openQueue(), sourceChunkCounts()]);
@@ -86,14 +87,14 @@ export default async function Admin() {
       <h2 style={{ marginTop: 48 }}>2 · Ingest sources</h2>
       <p style={{ color: "var(--color-muted)" }}>
         {stats ? `${stats.sources} sources, ${stats.chunks} passages in the corpus.` : "—"} Ingest
-        one source at a time; the writer can only cite what is in the corpus.
+        runs in small batches: click Ingest, and if pages remain, click again to continue.
+        The writer can only cite what is in the corpus.
       </p>
-      <div style={{ margin: "12px 0" }}>
-        <ActionButton action={ingestEverything} idleLabel="Ingest all sources" busyLabel="Ingesting all…" variant="primary" />
-      </div>
+      <AddSourceForm />
       <ul className="unit-list">
-        {SOURCE_REGISTRY.map((s) => {
+        {sources.map((s) => {
           const n = counts[s.id] ?? 0;
+          const custom = s.id.startsWith("custom-");
           return (
             <li key={s.id}>
               <div className="unit-link" style={{ cursor: "default" }}>
@@ -105,7 +106,9 @@ export default async function Admin() {
                     {n > 0 ? `${n} passages` : "not ingested"}
                   </span>
                 </span>
-                <ActionButton action={ingestOne.bind(null, s.id)} idleLabel="Ingest" busyLabel="Ingesting…" />
+                <ActionButton action={ingestStep.bind(null, s.id)} idleLabel={n > 0 ? "Continue" : "Ingest"} busyLabel="Ingesting…" />
+                <ActionButton action={ingestRestart.bind(null, s.id)} idleLabel="Restart" busyLabel="Restarting…" />
+                {custom && <ActionButton action={removeSource.bind(null, s.id)} idleLabel="Delete" busyLabel="…" />}
               </div>
             </li>
           );

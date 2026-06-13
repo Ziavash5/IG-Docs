@@ -2,7 +2,51 @@
 
 import { useState, useTransition } from "react";
 import type { ActionResult } from "./actions";
-import { assessUnit, generateUnit } from "./actions";
+import { assessUnit, generateUnit, addSource } from "./actions";
+
+/** Add your own official source by URL. */
+export function AddSourceForm() {
+  const [body, setBody] = useState("");
+  const [url, setUrl] = useState("");
+  const [corridor, setCorridor] = useState("base");
+  const [crawl, setCrawl] = useState(true);
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState("");
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button type="button" className="ghost-btn" onClick={() => setOpen(true)} style={{ margin: "8px 0" }}>
+        Add a source
+      </button>
+    );
+  }
+  return (
+    <div className="topic-edit" style={{ maxWidth: 620, margin: "8px 0 18px" }}>
+      <input className="assist-input" placeholder="Source name (e.g. CRA — Importing goods)" value={body} onChange={(e) => setBody(e.target.value)} />
+      <input className="assist-input" placeholder="https://… official page URL" value={url} onChange={(e) => setUrl(e.target.value)} />
+      <div className="topic-edit-row">
+        <select value={corridor} onChange={(e) => setCorridor(e.target.value)}>
+          <option value="base">base (all corridors)</option>
+          <option value="dach">dach</option>
+        </select>
+        <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={crawl} onChange={(e) => setCrawl(e.target.checked)} /> crawl sub-pages
+        </label>
+        <button className="book-call-btn" disabled={pending} onClick={() =>
+          start(async () => {
+            setMsg("Adding…");
+            const r = await addSource({ body, url, corridor, crawl });
+            setMsg(r.message);
+            if (r.ok) { setBody(""); setUrl(""); setOpen(false); }
+          })
+        }>Add</button>
+        <button className="ghost-btn" onClick={() => setOpen(false)}>Cancel</button>
+        {msg && <span className="action-msg ok">{msg}</span>}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Runs a (bound) server action with visible pending + result state. A 60s Vercel Hobby

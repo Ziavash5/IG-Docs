@@ -46,6 +46,99 @@ export async function replaceChunks(
   return chunks.length;
 }
 
+/** Append chunks for a source (used by resumable ingestion). */
+export async function insertChunks(
+  sourceId: string,
+  chunks: { text: string; locator: string; embedding: number[] }[],
+): Promise<void> {
+  const db = sql();
+  for (const c of chunks) {
+    await db`
+      insert into chunks (source_id, text, locator, embedding)
+      values (${sourceId}, ${c.text}, ${c.locator}, ${vec(c.embedding)}::vector)
+    `;
+  }
+}
+
+/** Wipe a source's chunks and crawl frontier (for a fresh re-ingest). */
+export async function clearSourceData(sourceId: string): Promise<void> {
+  const db = sql();
+  await db`delete from chunks where source_id = ${sourceId}`;
+  await db`delete from ingest_queue where source_id = ${sourceId}`;
+}
+
+export async function queueCounts(sourceId: string): Promise<{ pending: number; done: number }> {
+  const db = sql();
+  const [p] = await db`select count(*)::int n from ingest_queue where source_id = ${sourceId} and status = 'pending'`;
+  const [d] = await db`select count(*)::int n from ingest_queue where source_id = ${sourceId} and status = 'done'`;
+  return { pending: Number(p.n), done: Number(d.n) };
+}
+
+export async function seedIngestQueue(sourceId: string, urls: string[]): Promise<void> {
+  const db = sql();
+  for (const url of urls) {
+    await db`insert into ingest_queue (source_id, url) values (${sourceId}, ${url}) on conflict (source_id, url) do nothing`;
+  }
+}
+
+export async function nextPending(sourceId: string, limit: number): Promise<{ id: string; url: string }[]> {
+  const db = sql();
+  const rows = await db`
+    select id, url from ingest_queue where source_id = ${sourceId} and status = 'pending'
+    order by id limit ${limit}
+  `;
+  return rows.map((r) => ({ id: String(r.id), url: r.url as string }));
+}
+
+export async function markQueueDone(id: string): Promise<void> {
+  const db = sql();
+  await db`update ingest_queue set status = 'done' where id = ${id}`;
+}
+
+/** Add newly-discovered URLs to the frontier, capped at maxTotal pages for the source. */
+export async function addPending(sourceId: string, urls: string[], maxTotal: number): Promise<void> {
+  const db = sql();
+  const [t] = await db`select count(*)::int n from ingest_queue where source_id = ${sourceId}`;
+  let total = Number(t.n);
+  for (const url of urls) {
+    if (total >= maxTotal) break;
+    const r = await db`insert into ingest_queue (source_id, url) values (${sourceId}, ${url}) on conflict (source_id, url) do nothing`;
+    total += r.count;
+  }
+}
+
+// ---- Custom sources ---------------------------------------------------------
+
+export async function listCustomSources(): Promise<Source[]> {
+  const db = sql();
+  const rows = await db`select id, body, url, corridor, crawl_prefix, crawl_max from custom_sources order by created_at`;
+  return rows.map((r) => ({
+    id: r.id as string,
+    body: r.body as string,
+    url: r.url as string,
+    corridor: r.corridor as Source["corridor"],
+    crawl: r.crawl_prefix ? { prefix: r.crawl_prefix as string, max: Number(r.crawl_max) || 15 } : undefined,
+  }));
+}
+
+export async function insertCustomSource(s: {
+  id: string; body: string; url: string; corridor: string; crawlPrefix?: string; crawlMax?: number;
+}): Promise<void> {
+  const db = sql();
+  await db`
+    insert into custom_sources (id, body, url, corridor, crawl_prefix, crawl_max)
+    values (${s.id}, ${s.body}, ${s.url}, ${s.corridor}, ${s.crawlPrefix ?? null}, ${s.crawlMax ?? null})
+    on conflict (id) do update set body = excluded.body, url = excluded.url,
+      corridor = excluded.corridor, crawl_prefix = excluded.crawl_prefix, crawl_max = excluded.crawl_max
+  `;
+}
+
+export async function deleteCustomSource(id: string): Promise<void> {
+  const db = sql();
+  await db`delete from custom_sources where id = ${id}`;
+  await clearSourceData(id);
+}
+
 /** Cosine-similarity search over the chunks of the given sources. */
 export async function searchChunks(
   queryEmbedding: number[],

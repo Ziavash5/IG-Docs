@@ -1,4 +1,5 @@
 import type { Source } from "./pipeline/types";
+import { listCustomSources } from "./db";
 
 /**
  * Seed of the official source registry (docs/sources.md) with canonical URLs for
@@ -60,7 +61,18 @@ export const SOURCE_REGISTRY: Source[] = [
     crawl: { prefix: "https://www.gesetze-im-internet.de/ustg_1980/", max: 25 } },
 ];
 
+/** Built-in registry plus any sources added from the console. */
+export async function allSources(): Promise<Source[]> {
+  try {
+    const custom = await listCustomSources();
+    const ids = new Set(SOURCE_REGISTRY.map((s) => s.id));
+    return [...SOURCE_REGISTRY, ...custom.filter((c) => !ids.has(c.id))];
+  } catch {
+    return SOURCE_REGISTRY;
+  }
+}
+
 /** Candidate sources for a corridor: base layer + that corridor's overlay. */
-export function candidatesFor(corridor: string): Source[] {
-  return SOURCE_REGISTRY.filter((s) => s.corridor === "base" || s.corridor === corridor);
+export async function candidatesFor(corridor: string): Promise<Source[]> {
+  return (await allSources()).filter((s) => s.corridor === "base" || s.corridor === corridor);
 }

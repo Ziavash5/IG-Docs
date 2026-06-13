@@ -120,7 +120,7 @@ async function fetchReader(
 }
 
 /** Fetch one page robustly: direct first, then the rendering reader. */
-async function fetchPage(url: string): Promise<{ text: string; links: string[] } | null> {
+export async function fetchPage(url: string): Promise<{ text: string; links: string[] } | null> {
   return (await fetchDirect(url)) ?? (await fetchReader(url));
 }
 
@@ -153,7 +153,7 @@ async function collectPages(source: Source): Promise<{ url: string; text: string
 }
 
 /** Split one page into passage-level chunks, each citing that page. */
-function chunkPage(sourceId: string, url: string, text: string, startIdx: number): Chunk[] {
+export function chunkPage(sourceId: string, url: string, text: string, startIdx = 0): Chunk[] {
   const out: Chunk[] = [];
   const sentences = text.split(/(?<=[.!?])\s+/);
   let buf = "";

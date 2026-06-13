@@ -5,8 +5,9 @@ import { pillarBySlug } from "@/lib/content";
 import { selectSources, retrieveSpans } from "@/lib/pipeline/retrieve";
 import { writeUnit } from "@/lib/pipeline/write";
 import { verifyClaims, route } from "@/lib/pipeline/verify";
-import { ingestSource, ingestAll } from "@/lib/pipeline/ingest";
-import { SOURCE_REGISTRY } from "@/lib/sources-registry";
+import { fetchPage, chunkPage } from "@/lib/pipeline/ingest";
+import { embedDocuments } from "@/lib/voyage";
+import { allSources } from "@/lib/sources-registry";
 import {
   storeUnit,
   approveUnit as dbApprove,
@@ -17,6 +18,16 @@ import {
   reorderTopics,
   saveUnitBody as dbSaveBody,
   getUnitContent,
+  upsertSource,
+  insertChunks,
+  clearSourceData,
+  queueCounts,
+  seedIngestQueue,
+  nextPending,
+  markQueueDone,
+  addPending,
+  insertCustomSource,
+  deleteCustomSource,
 } from "@/lib/db";
 import { anthropic, MODEL, textOf } from "@/lib/anthropic";
 import {
@@ -154,37 +165,106 @@ export async function checkQuality(
   }
 }
 
-/** Ingest one official source into pgvector. */
-export async function ingestOne(sourceId: string): Promise<ActionResult> {
-  const source = SOURCE_REGISTRY.find((s) => s.id === sourceId);
+const STEP_PAGES = 5;
+
+/**
+ * Resumable ingestion. Each call processes a small batch of pages so a deep source
+ * ingests across several clicks without timing out. Click again while pages remain.
+ */
+export async function ingestStep(sourceId: string): Promise<ActionResult> {
+  const source = (await allSources()).find((s) => s.id === sourceId);
   if (!source) return { ok: false, message: "Unknown source." };
+
   try {
-    const r = await ingestSource(source);
+    const counts = await queueCounts(sourceId);
+    if (counts.pending === 0 && counts.done === 0) {
+      // Fresh start: reset and seed the frontier with the source's seed pages.
+      await clearSourceData(sourceId);
+      await upsertSource(source);
+      const seeds = source.urls?.length ? [source.url, ...source.urls] : [source.url];
+      await seedIngestQueue(sourceId, [...new Set(seeds)]);
+    } else if (counts.pending === 0) {
+      return { ok: true, message: "Already complete. Use Restart to re-ingest." };
+    }
+
+    const max = source.crawl?.max ?? 3;
+    const batch = await nextPending(sourceId, STEP_PAGES);
+    let added = 0;
+    for (const item of batch) {
+      const page = await fetchPage(item.url);
+      await markQueueDone(item.id);
+      if (!page || page.text.length < 200) continue;
+      const chunks = chunkPage(sourceId, item.url, page.text);
+      if (chunks.length) {
+        const emb = await embedDocuments(chunks.map((c) => c.text));
+        await insertChunks(sourceId, chunks.map((c, i) => ({ text: c.text, locator: c.locator, embedding: emb[i] })));
+        added += chunks.length;
+      }
+      if (source.crawl) {
+        await addPending(sourceId, page.links.filter((l) => l.startsWith(source.crawl!.prefix)), max);
+      }
+    }
+
+    const after = await queueCounts(sourceId);
     revalidatePath("/admin");
-    return r.chunks > 0
-      ? { ok: true, message: `Ingested ${r.chunks} passages from ${r.pages} page(s).` }
-      : { ok: false, message: "Fetched, but no usable text (source may block bots or be JS-rendered)." };
+    return {
+      ok: true,
+      message:
+        after.pending > 0
+          ? `Ingested ${batch.length} page(s), +${added} passages. ${after.pending} pending — click Ingest to continue.`
+          : `Done. ${after.done} page(s) ingested.`,
+    };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
 }
 
-/** Ingest the whole registry. Likely to exceed the 60s limit on Vercel Hobby. */
-export async function ingestEverything(): Promise<ActionResult> {
+/** Reset a source and start ingestion over. */
+export async function ingestRestart(sourceId: string): Promise<ActionResult> {
   try {
-    const results = await ingestAll();
-    const ok = results.filter((r) => r.chunks > 0);
-    const total = results.reduce((a, r) => a + r.chunks, 0);
-    const failed = results.filter((r) => r.chunks === 0).map((r) => r.sourceId);
+    await clearSourceData(sourceId);
     revalidatePath("/admin");
-    return {
-      ok: ok.length > 0,
-      message:
-        `Ingested ${ok.length}/${results.length} sources (${total} passages).` +
-        (failed.length ? ` No text from: ${failed.join(", ")}.` : ""),
-    };
+    return await ingestStep(sourceId);
   } catch (e) {
-    return { ok: false, message: `Failed (likely a 60s timeout — ingest per-source): ${errMsg(e)}` };
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+// ---- Custom sources ---------------------------------------------------------
+
+const slugifyId = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+
+export async function addSource(input: {
+  body: string; url: string; corridor: string; crawl: boolean;
+}): Promise<ActionResult> {
+  if (!input.body.trim() || !/^https?:\/\//.test(input.url.trim())) {
+    return { ok: false, message: "Give a name and a valid http(s) URL." };
+  }
+  try {
+    const id = `custom-${slugifyId(input.body)}-${Math.random().toString(36).slice(2, 5)}`;
+    let crawlPrefix: string | undefined;
+    if (input.crawl) {
+      const u = new URL(input.url.trim());
+      crawlPrefix = `${u.origin}${u.pathname.replace(/[^/]*$/, "")}`;
+    }
+    await insertCustomSource({
+      id, body: input.body.trim(), url: input.url.trim(), corridor: input.corridor,
+      crawlPrefix, crawlMax: input.crawl ? 20 : undefined,
+    });
+    revalidatePath("/admin");
+    return { ok: true, message: "Source added. Click Ingest on it." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function removeSource(id: string): Promise<ActionResult> {
+  try {
+    await deleteCustomSource(id);
+    revalidatePath("/admin");
+    return { ok: true, message: "Removed." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
 }
 

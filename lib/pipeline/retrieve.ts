@@ -12,7 +12,7 @@ import { candidatesFor } from "../sources-registry";
  */
 
 export async function selectSources(question: string, corridor: Corridor): Promise<string[]> {
-  const candidates = candidatesFor(corridor);
+  const candidates = await candidatesFor(corridor);
   const ids = candidates.map((c) => c.id);
   try {
     const msg = await anthropic().messages.create({
