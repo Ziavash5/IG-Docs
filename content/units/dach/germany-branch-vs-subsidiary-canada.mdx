@@ -1,0 +1,90 @@
+---
+id: dach-pillar1-branch-vs-subsidiary
+slug: germany-branch-vs-subsidiary-canada
+question: "Should a German company open a Canadian branch or a subsidiary?"
+pillar: 1
+layer: overlay
+corridor: dach
+jurisdictions: [CA, DE]
+risk_tier: interpretive
+status: draft
+author:
+  name: ""
+  credentials: ""
+last_reviewed: 2026-06-13
+claims:
+  - text: "A federal corporation (subsidiary) is incorporated under the Canada Business Corporations Act."
+    source_id: justice-cbca
+    locator: "https://laws-lois.justice.gc.ca/eng/acts/C-44/"
+    verified: false
+  - text: "A non-resident corporation carrying on business in Canada through a branch is subject to Canadian tax on income from that business, plus branch tax under Part XIV of the Income Tax Act."
+    source_id: justice-ita
+    locator: "[VERIFY: Income Tax Act, Part XIV branch tax — locate section]"
+    verified: false
+  - text: "Branch tax may be reduced or eliminated where a tax treaty applies."
+    source_id: fin-ca-de-treaty
+    locator: "[VERIFY: Canada–Germany Treaty article governing branch profits]"
+    verified: false
+citations: [justice-cbca, justice-ita, cra-corp-tax, cra-nonres, fin-ca-de-treaty, de-bzst]
+cta: "Book a 20-minute Canada-entry call"
+---
+
+{/*
+  EXEMPLAR — STRUCTURAL SKELETON ONLY. Not verified content; do not publish.
+  Every [VERIFY] marker is a claim the grounded-generation pipeline fills from an
+  official source in docs/sources.md, after which the operator confirms
+  "does the cited source support this claim?" and flips claims[].verified = true.
+  This file exists to lock the SHAPE of a gold-standard DACH unit.
+*/}
+
+# Should a German company open a Canadian branch or a subsidiary?
+
+**Direct answer.** For most German companies establishing a lasting presence in Canada,
+a **Canadian subsidiary** (a corporation incorporated in Canada) is the common
+structure, because it ring-fences liability and is taxed as a Canadian resident. A
+**branch** keeps the operation inside the German parent's legal entity. The right choice
+turns on liability, how profits are taxed on both the Canadian *and* German sides, and
+treaty treatment. _(Each assertion below is tied to an official source; interpretive
+trade-offs are general information — your situation is decided on a call.)_
+
+## The rule (Canada side)
+
+- A subsidiary is incorporated under the **Canada Business Corporations Act**. [`justice-cbca`]
+- A branch is the German parent **carrying on business in Canada** directly; its
+  Canadian-source business income is taxed, and **branch tax** applies under the Income
+  Tax Act. [`justice-ita` — VERIFY section]
+- Treaty relief: branch tax may be reduced/eliminated under the **Canada–Germany Tax
+  Treaty**. [`fin-ca-de-treaty` — VERIFY article]
+
+## What determines how it applies
+
+- Expected liability exposure of the Canadian activity.
+- Whether the activity creates a **permanent establishment** (interpretive — booked call).
+- Repatriation plans (dividends from a subsidiary vs. branch profit remittance).
+- Whether early Canadian losses are wanted on the German books.
+
+## How it differs for your corridor (DACH)
+
+> This is the part a Canada-only competitor cannot write.
+
+- **German-side consequence.** A branch's Canadian result flows into the German parent's
+  accounts; a subsidiary is a separate taxpayer whose profits face German tax only on
+  distribution / under CFC rules. German CFC (Außensteuergesetz) treatment is the
+  decisive variable. [`de-bzst` — VERIFY]
+- **Treaty interaction.** The Canada–Germany treaty governs branch tax and dividend
+  withholding differently. [`fin-ca-de-treaty` — VERIFY]
+
+## Checklist
+
+- [ ] Decide structure (this unit) → if subsidiary, see *Incorporate & Register* (Pillar 2).
+- [ ] Confirm whether the activity creates a Canadian permanent establishment.
+- [ ] Map the German-side tax consequence of the chosen structure.
+- [ ] Register for the relevant CRA program accounts.
+
+---
+
+**This is general information, not advice.** Whether a branch or subsidiary is right for
+*your* company depends on your liability, treaty position, and German-side tax exposure.
+**[Book a 20-minute Canada-entry call.](#book)**
+
+_Last reviewed: 2026-06-13 · Author: (pending byline + credentials before publish)_

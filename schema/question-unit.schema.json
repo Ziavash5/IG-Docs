@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://intergest.ca/schema/question-unit.schema.json",
+  "title": "Question Unit",
+  "description": "The atomic, directly-answerable content unit for the Corridor Authority Engine.",
+  "type": "object",
+  "required": [
+    "id",
+    "slug",
+    "question",
+    "pillar",
+    "layer",
+    "corridor",
+    "risk_tier",
+    "status",
+    "last_reviewed",
+    "claims",
+    "citations"
+  ],
+  "properties": {
+    "id": { "type": "string", "description": "Stable unique id." },
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "URL slug." },
+    "question": { "type": "string", "minLength": 8, "description": "The exact long-tail question this unit answers." },
+    "pillar": { "type": "integer", "minimum": 1, "maximum": 7 },
+    "layer": { "enum": ["base", "overlay"] },
+    "corridor": { "enum": ["base", "dach", "uk", "usa", "australia", "newzealand", "japan", "india"] },
+    "jurisdictions": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[A-Z]{2}$" },
+      "description": "ISO 3166-1 alpha-2 codes the unit touches."
+    },
+    "risk_tier": {
+      "enum": ["factual", "interpretive"],
+      "description": "factual = source-verifiable, auto-ships when cited+verified. interpretive = never asserted as conclusion, framed as general info + booked call, human-gated."
+    },
+    "status": { "enum": ["draft", "in_review", "published"] },
+    "author": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "credentials": { "type": "string", "description": "E-E-A-T requirement; mandatory before publish." }
+      }
+    },
+    "last_reviewed": { "type": "string", "format": "date", "description": "Mandatory, rendered visibly on the page." },
+    "claims": {
+      "type": "array",
+      "description": "Every factual assertion. No source span, no claim.",
+      "items": {
+        "type": "object",
+        "required": ["text", "source_id", "locator", "verified"],
+        "properties": {
+          "text": { "type": "string" },
+          "source_id": { "type": "string", "description": "References an entry in docs/sources.md." },
+          "locator": { "type": "string", "description": "URL or precise locator of the supporting span." },
+          "verified": { "type": "boolean", "description": "Set true only after dual-retrieval verification or operator approval." }
+        }
+      }
+    },
+    "citations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "source_ids cited by this unit. Official sources only."
+    },
+    "cta": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "description": "A base-layer unit must not carry a non-base corridor.",
+      "if": { "properties": { "layer": { "const": "base" } } },
+      "then": { "properties": { "corridor": { "const": "base" } } }
+    },
+    {
+      "description": "Published units require a bylined author with credentials and at least one verified claim.",
+      "if": { "properties": { "status": { "const": "published" } } },
+      "then": {
+        "required": ["author"],
+        "properties": {
+          "author": {
+            "required": ["name", "credentials"],
+            "properties": {
+              "name": { "minLength": 1 },
+              "credentials": { "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
