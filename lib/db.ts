@@ -110,10 +110,10 @@ export async function storeUnit(u: StoredUnitInput): Promise<void> {
       values (${u.id}, ${c.text}, ${c.sourceId}, ${c.locator}, ${c.verified})
     `;
   }
+  // Regenerating replaces any prior open review entry, instead of stacking duplicates.
+  await db`update review_queue set resolved_at = now() where unit_id = ${u.id} and resolved_at is null`;
   if (u.queueReason) {
-    await db`
-      insert into review_queue (unit_id, reason) values (${u.id}, ${u.queueReason})
-    `;
+    await db`insert into review_queue (unit_id, reason) values (${u.id}, ${u.queueReason})`;
   }
 }
 
@@ -125,6 +125,7 @@ export interface QueueRow {
   riskTier: string;
   reason: string;
   createdAt: string;
+  body: string | null;
   claims: { text: string; sourceId: string; locator: string; verified: boolean }[];
 }
 
@@ -132,7 +133,7 @@ export async function openQueue(): Promise<QueueRow[]> {
   const db = sql();
   const rows = await db`
     select q.id as queue_id, q.unit_id, q.reason, q.created_at,
-           u.slug, u.question, u.risk_tier
+           u.slug, u.question, u.risk_tier, u.body
     from review_queue q join units u on u.id = q.unit_id
     where q.resolved_at is null
     order by q.created_at desc
@@ -150,6 +151,7 @@ export async function openQueue(): Promise<QueueRow[]> {
       riskTier: r.risk_tier as string,
       reason: r.reason as string,
       createdAt: String(r.created_at),
+      body: (r.body as string) ?? null,
       claims: claims.map((c) => ({
         text: c.text as string,
         sourceId: c.source_id as string,

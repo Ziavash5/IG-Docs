@@ -358,6 +358,19 @@ p { margin: 14px 0; }
 .action-msg.ok { color: #1f7a47; }
 .action-msg.err { color: #b0473f; }
 
+.draft-preview { margin: 10px 0; }
+.draft-preview summary { cursor: pointer; font-family: var(--font-head); font-size: 13px; font-weight: 600; color: var(--color-brand); }
+.draft-preview pre {
+  white-space: pre-wrap;
+  font-family: var(--font-body);
+  font-size: 14px;
+  background: #fff;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 10px;
+}
+
 .claim-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
 .claim-table th {
   text-align: left;

@@ -121,18 +121,31 @@ export default async function Admin() {
             <strong>{row.question}</strong>
             <span className="status-badge state-in_review">{row.reason}</span>
           </div>
-          <table className="claim-table">
-            <thead><tr><th>Claim</th><th>Source</th><th>Verified</th></tr></thead>
-            <tbody>
-              {row.claims.map((c, i) => (
-                <tr key={i}>
-                  <td>{c.text}</td>
-                  <td><a href={c.locator} target="_blank" rel="noreferrer" className="source-chip">{c.sourceId}</a></td>
-                  <td>{c.verified ? "✓" : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {row.body && (
+            <details className="draft-preview">
+              <summary>Read the draft</summary>
+              <pre>{row.body}</pre>
+            </details>
+          )}
+          {row.claims.length > 0 ? (
+            <table className="claim-table">
+              <thead><tr><th>Claim</th><th>Source</th><th>Verified</th></tr></thead>
+              <tbody>
+                {row.claims.map((c, i) => (
+                  <tr key={i}>
+                    <td>{c.text}</td>
+                    <td><a href={c.locator} target="_blank" rel="noreferrer" className="source-chip">{c.sourceId}</a></td>
+                    <td>{c.verified ? "✓" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ color: "var(--color-muted)", fontSize: 14, marginTop: 10 }}>
+              No source-backed claims were extracted, usually because the relevant source
+              was not ingested. Ingest the right source (section 2) and regenerate.
+            </p>
+          )}
           <div style={{ marginTop: 12 }}>
             <ActionButton action={approveUnit.bind(null, row.unitId)} idleLabel="Approve & publish" busyLabel="Publishing…" variant="primary" />
           </div>
