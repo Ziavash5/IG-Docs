@@ -37,6 +37,8 @@ import {
   insertCorridor,
   deleteCorridor,
   setSetting,
+  publishQuestionAnswer,
+  deleteQuestion,
 } from "@/lib/db";
 import { runFreshnessCheck } from "@/lib/freshness";
 import { getActiveCorridor } from "@/lib/corridor";
@@ -705,6 +707,53 @@ export async function resetUnitContent(slug: string): Promise<ActionResult> {
     revalidatePath("/admin");
     revalidatePath("/", "layout");
     return { ok: true, message: "Content cleared. Generate again to start fresh." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** AI-draft a short, grounded answer to a reader question (operator edits then publishes). */
+export async function draftAnswer(
+  corridor: string,
+  question: string,
+): Promise<{ ok: boolean; text?: string; message?: string }> {
+  try {
+    const sourceIds = await selectSources(question, corridor);
+    const spans = await retrieveSpans(question, sourceIds, 6);
+    if (spans.length === 0) return { ok: false, message: "No source passages — ingest relevant sources first." };
+    const context = spans.map((s) => `[${s.chunk.sourceId}] ${s.chunk.text}`).join("\n\n");
+    const msg = await anthropic().messages.create({
+      model: MODEL,
+      max_tokens: 800,
+      system:
+        "Answer the reader's question in 2-4 sentences using ONLY the official source " +
+        "passages. Cite source ids in brackets. Never invent figures or rules. No " +
+        "meta-commentary. Never use em-dashes.",
+      messages: [{ role: "user", content: `Question: ${question}\n\nOfficial source passages:\n${context}` }],
+    });
+    return { ok: true, text: textOf(msg).replace(/\s*—\s*/g, ", ").trim() };
+  } catch (e) {
+    return { ok: false, message: errMsg(e) };
+  }
+}
+
+export async function publishQuestion(id: string, answer: string): Promise<ActionResult> {
+  if (answer.trim().length < 5) return { ok: false, message: "Write an answer first." };
+  try {
+    await publishQuestionAnswer(id, answer.trim());
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Published to the guide." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function dismissQuestion(id: string): Promise<ActionResult> {
+  try {
+    await deleteQuestion(id);
+    revalidatePath("/admin");
+    return { ok: true, message: "Dismissed." };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }

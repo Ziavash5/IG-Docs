@@ -1,9 +1,9 @@
 import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { allSources } from "@/lib/sources-registry";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
-import { openQueue, ingestStats, sourceChunkCounts, listLeads, type QueueRow, type LeadRow } from "@/lib/db";
+import { openQueue, ingestStats, sourceChunkCounts, listLeads, pendingQuestions, type QueueRow, type LeadRow, type QuestionRow } from "@/lib/db";
 import { approveUnit, rejectUnit, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar, CtaSettings } from "./buttons";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar, CtaSettings, QaReviewItem } from "./buttons";
 import { getCta } from "@/lib/cta";
 import { PillarEditor } from "./curriculum";
 import { SourcePanel } from "./source-panel";
@@ -18,6 +18,7 @@ export default async function Admin() {
   let queue: QueueRow[] = [];
   let counts: Record<string, number> = {};
   let leads: LeadRow[] = [];
+  let questions: QuestionRow[] = [];
   const corridor = await getActiveCorridor();
   let journey = await getCurriculum(corridor);
   let seeded = await isSeeded();
@@ -26,7 +27,7 @@ export default async function Admin() {
   let cta = await getCta();
   let dbError: string | null = null;
   try {
-    [stats, queue, counts, leads] = await Promise.all([ingestStats(), openQueue(), sourceChunkCounts(), listLeads(50)]);
+    [stats, queue, counts, leads, questions] = await Promise.all([ingestStats(), openQueue(), sourceChunkCounts(), listLeads(50), pendingQuestions()]);
   } catch (e) {
     dbError = e instanceof Error ? e.message : String(e);
   }
@@ -136,18 +137,20 @@ export default async function Admin() {
             </details>
           )}
           {row.claims.length > 0 ? (
-            <table className="claim-table">
-              <thead><tr><th>Claim</th><th>Source</th><th>Verified</th></tr></thead>
-              <tbody>
-                {row.claims.map((c, i) => (
-                  <tr key={i}>
-                    <td>{c.text}</td>
-                    <td><a href={c.locator} target="_blank" rel="noreferrer" className="source-chip">{c.sourceId}</a></td>
-                    <td>{c.verified ? "✓" : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-scroll">
+              <table className="claim-table">
+                <thead><tr><th>Claim</th><th>Source</th><th>Verified</th></tr></thead>
+                <tbody>
+                  {row.claims.map((c, i) => (
+                    <tr key={i}>
+                      <td>{c.text}</td>
+                      <td><a href={c.locator} target="_blank" rel="noreferrer" className="source-chip">{c.sourceId}</a></td>
+                      <td>{c.verified ? "✓" : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p style={{ color: "var(--color-muted)", fontSize: 14, marginTop: 10 }}>
               No source-backed claims were extracted, usually because the relevant source
@@ -188,8 +191,19 @@ export default async function Admin() {
         </div>
       ))}
 
-      {/* 5 — Settings */}
-      <h2 style={{ marginTop: 48 }}>5 · Settings</h2>
+      {/* 5 — Reader questions */}
+      <h2 style={{ marginTop: 48 }}>5 · Reader questions ({questions.length})</h2>
+      <p style={{ color: "var(--color-muted)" }}>
+        Questions visitors asked on a guide. Answer (AI-draft, then edit) and publish to
+        append fresh Q&amp;A to that guide page.
+      </p>
+      {questions.length === 0 && <p style={{ color: "var(--color-faint)", fontSize: 14 }}>No pending questions.</p>}
+      {questions.map((q) => (
+        <QaReviewItem key={q.id} q={{ id: q.id, corridor: q.corridor, unitSlug: q.unitSlug, question: q.question, email: q.email }} />
+      ))}
+
+      {/* 6 — Settings */}
+      <h2 style={{ marginTop: 48 }}>6 · Settings</h2>
       <p style={{ color: "var(--color-muted)" }}>
         The booking CTA shown at the bottom of guides, cited in <code>/llms.txt</code>, and
         offered in the chat. Use your Calendly/booking URL when ready.

@@ -6,7 +6,48 @@ import type { ActionResult } from "./actions";
 import {
   assessUnit, generateUnit, addSource, addPdfSource, ingestAllStep, autopilotStep,
   discoverSources, checkSourceFreshness, setCorridor, addCorridor, saveCta,
+  draftAnswer, publishQuestion, dismissQuestion,
 } from "./actions";
+
+type QItem = { id: string; corridor: string; unitSlug: string; question: string; email: string | null };
+
+/** Answer one reader question (AI-draft, edit, then publish to the guide). */
+export function QaReviewItem({ q }: { q: QItem }) {
+  const [answer, setAnswer] = useState("");
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState("");
+  const [doneMsg, setDoneMsg] = useState("");
+  const router = useRouter();
+
+  if (doneMsg) return <div className="corridor-callout"><span className="action-msg ok">{doneMsg}</span></div>;
+
+  return (
+    <div className="corridor-callout">
+      <strong>{q.question}</strong>
+      <p style={{ color: "var(--color-faint)", fontSize: 12, margin: "4px 0 8px" }}>
+        {q.corridor} · {q.unitSlug}{q.email ? ` · ${q.email}` : ""}
+      </p>
+      <textarea className="editor-area" rows={4} value={answer} onChange={(e) => setAnswer(e.target.value)}
+        placeholder="Answer (grounded in sources)…" />
+      <div className="assist-bar" style={{ marginTop: 8 }}>
+        <button className="ghost-btn" disabled={pending} onClick={() => start(async () => {
+          setMsg("Drafting…");
+          const r = await draftAnswer(q.corridor, q.question);
+          if (r.ok && r.text) { setAnswer(r.text); setMsg(""); } else setMsg(r.message ?? "Failed.");
+        })}>AI draft</button>
+        <button className="book-call-btn" disabled={pending} onClick={() => start(async () => {
+          const r = await publishQuestion(q.id, answer);
+          if (r.ok) { setDoneMsg(r.message); router.refresh(); } else setMsg(r.message);
+        })}>Publish to guide</button>
+        <button className="ghost-btn" disabled={pending} onClick={() => start(async () => {
+          const r = await dismissQuestion(q.id);
+          if (r.ok) { setDoneMsg("Dismissed."); router.refresh(); } else setMsg(r.message);
+        })}>Dismiss</button>
+        {msg && <span className="action-msg ok">{msg}</span>}
+      </div>
+    </div>
+  );
+}
 
 /** Edit the booking CTA used on guides, in llms.txt, and the chat. */
 export function CtaSettings({ label, url }: { label: string; url: string }) {

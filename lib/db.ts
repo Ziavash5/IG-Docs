@@ -194,6 +194,52 @@ export async function leadCount(): Promise<number> {
   return Number(r.n);
 }
 
+// ---- Reader Q&A -------------------------------------------------------------
+
+export interface QuestionRow {
+  id: string; corridor: string; unitSlug: string; question: string;
+  answer: string | null; email: string | null; createdAt: string;
+}
+
+export async function insertQuestion(q: { corridor: string; unitSlug: string; question: string; email: string }): Promise<void> {
+  const db = sql();
+  await db`insert into questions (corridor, unit_slug, question, email)
+           values (${q.corridor}, ${q.unitSlug}, ${q.question}, ${q.email})`;
+}
+
+export async function publishedQuestions(corridor: string, unitSlug: string): Promise<{ question: string; answer: string }[]> {
+  const db = sql();
+  const rows = await db`
+    select question, answer from questions
+    where corridor = ${corridor} and unit_slug = ${unitSlug} and status = 'published' and answer is not null
+    order by answered_at desc
+  `;
+  return rows.map((r) => ({ question: r.question as string, answer: r.answer as string }));
+}
+
+export async function pendingQuestions(): Promise<QuestionRow[]> {
+  const db = sql();
+  const rows = await db`
+    select id, corridor, unit_slug, question, answer, email, created_at
+    from questions where status = 'pending' order by created_at
+  `;
+  return rows.map((r) => ({
+    id: String(r.id), corridor: r.corridor as string, unitSlug: r.unit_slug as string,
+    question: r.question as string, answer: (r.answer as string) ?? null,
+    email: (r.email as string) ?? null, createdAt: String(r.created_at),
+  }));
+}
+
+export async function publishQuestionAnswer(id: string, answer: string): Promise<void> {
+  const db = sql();
+  await db`update questions set answer = ${answer}, status = 'published', answered_at = now() where id = ${id}`;
+}
+
+export async function deleteQuestion(id: string): Promise<void> {
+  const db = sql();
+  await db`delete from questions where id = ${id}`;
+}
+
 // ---- Settings ---------------------------------------------------------------
 
 export async function getSetting(key: string): Promise<string | null> {

@@ -4,7 +4,10 @@ import { notFound } from "next/navigation";
 import { pathFor, findUnit as findStaticUnit, type Stage, type UnitEntry } from "@/lib/content";
 import { getCurriculum, unitContent } from "@/lib/curriculum";
 import type { PublicUnit } from "@/lib/db";
+import { publishedQuestions } from "@/lib/db";
 import { BookCall } from "../components";
+import { LiveData } from "../live-data";
+import { AskDesk } from "../qa";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +56,8 @@ export default async function Page({ params }: { params: Promise<Params> }) {
   if (r.kind === "pillar") return <PillarView corridor={corridor} stage={r.stage} pillar={r.pillar} />;
 
   const content = await unitContent(corridor, r.unit.slug);
-  return <UnitView stageLabel={r.stage.label}
+  const qa = await publishedQuestions(corridor, r.unit.slug).catch(() => []);
+  return <UnitView stageLabel={r.stage.label} corridor={corridor} unitSlug={r.unit.slug} qa={qa}
     pillarTitle={r.pillar.title} pillarN={r.pillar.n} unit={r.unit} content={content} />;
 }
 
@@ -130,9 +134,10 @@ function PillarView({ corridor, stage, pillar }: { corridor: string; stage: Stag
 // ---- Unit reading experience ------------------------------------------------
 
 function UnitView({
-  stageLabel, pillarTitle, pillarN, unit, content,
+  stageLabel, pillarTitle, pillarN, unit, content, corridor, unitSlug, qa,
 }: {
-  stageLabel: string;
+  stageLabel: string; corridor: string; unitSlug: string;
+  qa: { question: string; answer: string }[];
   pillarTitle: string; pillarN: number; unit: UnitEntry; content: PublicUnit | null;
 }) {
   // Prefer generated content from the DB; otherwise fall back to the in-code exemplar.
@@ -162,6 +167,11 @@ function UnitView({
           text: hasGenerated ? content!.body!.slice(0, 500) : exemplar?.directAnswer ?? "",
         },
       },
+      ...qa.map((q) => ({
+        "@type": "Question",
+        name: q.question,
+        acceptedAnswer: { "@type": "Answer", text: q.answer.slice(0, 500) },
+      })),
     ],
   };
 
@@ -180,6 +190,7 @@ function UnitView({
           {content!.author ? ` by ${content!.author}${content!.credentials ? `, ${content!.credentials}` : ""}` : ""}.
         </p>
       )}
+      {hasGenerated && <LiveData />}
 
       {hasGenerated ? (
         <>
@@ -240,6 +251,19 @@ function UnitView({
           </p>
         </div>
       )}
+
+      {hasGenerated && qa.length > 0 && (
+        <section className="qa-section">
+          <h2>Questions &amp; answers</h2>
+          {qa.map((item, i) => (
+            <div key={i} className="qa-item">
+              <p className="qa-q">{item.question}</p>
+              <Markdown text={item.answer} />
+            </div>
+          ))}
+        </section>
+      )}
+      {hasGenerated && <AskDesk corridor={corridor} unitSlug={unitSlug} />}
 
       <BookCall />
     </article>
