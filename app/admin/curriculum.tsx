@@ -44,13 +44,13 @@ export function PillarEditor({
     run(() => reorder(next));
   };
 
-  const run = (fn: () => Promise<{ ok: boolean; message: string }>) =>
+  const run = (fn: () => Promise<{ ok: boolean; message: string }>, startMsg = "Working…") =>
     start(async () => {
-      setMsg("");
+      setMsg(startMsg);
       try {
         setMsg((await fn()).message);
       } catch {
-        setMsg("Stopped before finishing (timeout?). Check logs.");
+        setMsg("Stopped early (timeout?). Try again.");
       }
     });
 
@@ -97,7 +97,9 @@ export function PillarEditor({
                   {u.question}
                   <span style={{ color: "var(--color-faint)", marginLeft: 8 }}>{stateLabel[u.state] ?? u.state}</span>
                 </span>
-                <button className="ghost-btn" disabled={pending} onClick={() => run(() => generateUnit(u.slug))}>Generate</button>
+                <button className="ghost-btn" disabled={pending} onClick={() => run(() => generateUnit(u.slug), `Generating “${u.title}” from sources… (up to a minute)`)}>
+                  {pending ? "Working…" : "Generate"}
+                </button>
                 {u.state !== "planned" && (
                   <a className="ghost-btn" href={`/admin/edit/${u.slug}`}>Edit content</a>
                 )}

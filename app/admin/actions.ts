@@ -6,7 +6,7 @@ import { selectSources, retrieveSpans } from "@/lib/pipeline/retrieve";
 import { writeUnit } from "@/lib/pipeline/write";
 import { verifyClaims, route } from "@/lib/pipeline/verify";
 import { fetchPage, chunkPage } from "@/lib/pipeline/ingest";
-import { embedDocuments } from "@/lib/voyage";
+import { embedDocuments, embedQuery } from "@/lib/voyage";
 import { allSources } from "@/lib/sources-registry";
 import {
   storeUnit,
@@ -25,6 +25,8 @@ import {
   queueCounts,
   allQueueCounts,
   sourceChunkCounts,
+  searchChunks,
+  browseChunks,
   seedIngestQueue,
   nextPending,
   markQueueDone,
@@ -235,6 +237,31 @@ export async function corpusStatus(): Promise<SourceStatus[]> {
       pending: q[s.id]?.pending ?? 0,
       done: q[s.id]?.done ?? 0,
     }));
+  } catch {
+    return [];
+  }
+}
+
+export type Passage = { sourceId: string; locator: string; text: string; score?: number };
+
+/** Semantic search across the corpus (optionally one source), for the explorer. */
+export async function corpusSearch(query: string, sourceId?: string): Promise<Passage[]> {
+  if (!query.trim()) return [];
+  try {
+    const emb = await embedQuery(query);
+    const ids = sourceId ? [sourceId] : (await allSources()).map((s) => s.id);
+    const spans = await searchChunks(emb, ids, 25);
+    return spans.map((s) => ({ sourceId: s.chunk.sourceId, locator: s.chunk.locator, text: s.chunk.text, score: s.score }));
+  } catch {
+    return [];
+  }
+}
+
+/** Browse one source's passages in order (paginated). */
+export async function corpusBrowse(sourceId: string, offset = 0): Promise<Passage[]> {
+  try {
+    const rows = await browseChunks(sourceId, 25, offset);
+    return rows.map((r) => ({ sourceId, locator: r.locator, text: r.text }));
   } catch {
     return [];
   }

@@ -394,6 +394,20 @@ export async function saveUnitBody(slug: string, body: string): Promise<void> {
   await db`update units set body = ${body}, updated_at = now() where slug = ${slug}`;
 }
 
+/** Browse a source's passages (paginated), for the corpus explorer. */
+export async function browseChunks(
+  sourceId: string,
+  limit: number,
+  offset: number,
+): Promise<{ locator: string; text: string }[]> {
+  const db = sql();
+  const rows = await db`
+    select text, locator from chunks where source_id = ${sourceId}
+    order by id limit ${limit} offset ${offset}
+  `;
+  return rows.map((r) => ({ text: r.text as string, locator: r.locator as string }));
+}
+
 /** Passage count per source id, for showing ingest status in the console. */
 export async function sourceChunkCounts(): Promise<Record<string, number>> {
   const db = sql();

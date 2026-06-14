@@ -95,7 +95,10 @@ export default async function Admin() {
       ))}
 
       {/* 2 — Ingestion */}
-      <h2 style={{ marginTop: 48 }}>2 · Ingest sources</h2>
+      <h2 style={{ marginTop: 48 }}>
+        2 · Ingest sources
+        <a href="/admin/corpus" className="ghost-btn" style={{ fontSize: 13, marginLeft: 12, verticalAlign: "middle" }}>Corpus explorer</a>
+      </h2>
       <p style={{ color: "var(--color-muted)" }}>
         {stats ? `${stats.sources} sources, ${stats.chunks} passages in the corpus.` : "—"} Ingest
         runs in small batches: click Ingest, and if pages remain, click again to continue.
@@ -103,7 +106,7 @@ export default async function Admin() {
       </p>
       <AddSourceForm />
       <SourcePanel
-        sources={sources.map((s) => ({ id: s.id, body: s.body, custom: s.id.startsWith("custom-") }))}
+        sources={sources.map((s) => ({ id: s.id, body: s.body, custom: s.id.startsWith("custom-"), corridor: s.corridor }))}
       />
 
       {/* 3 — Approval queue */}

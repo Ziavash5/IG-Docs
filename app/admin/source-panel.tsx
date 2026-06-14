@@ -12,12 +12,13 @@ import {
 } from "./actions";
 
 type Step = { ok: boolean; done: boolean; message: string };
-type S = { id: string; body: string; custom: boolean };
+type S = { id: string; body: string; custom: boolean; corridor: string };
 
 export function SourcePanel({ sources }: { sources: S[] }) {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState("");
+  const [filter, setFilter] = useState<"all" | "base" | "dach">("all");
   const [status, setStatus] = useState<Record<string, SourceStatus>>({});
   const stop = useRef(false);
   const router = useRouter();
@@ -72,7 +73,9 @@ export function SourcePanel({ sources }: { sources: S[] }) {
     }
   };
 
-  const list = sources.map((s) => ({ ...s, st: status[s.id] }));
+  const list = sources
+    .filter((s) => filter === "all" || s.corridor === filter)
+    .map((s) => ({ ...s, st: status[s.id] }));
   const complete = list.filter((s) => s.st && s.st.pending === 0 && s.st.passages > 0).length;
   const pendingPages = list.reduce((a, s) => a + (s.st?.pending ?? 0), 0);
 
@@ -92,8 +95,18 @@ export function SourcePanel({ sources }: { sources: S[] }) {
         )}
       </div>
 
+      <div className="assist-bar" style={{ margin: "0 0 8px" }}>
+        <span style={{ fontSize: 12, color: "var(--color-faint)" }}>Show:</span>
+        {(["all", "base", "dach"] as const).map((f) => (
+          <button key={f} type="button" className="ghost-btn"
+            style={filter === f ? { borderColor: "var(--color-brand)", color: "var(--color-brand)" } : undefined}
+            onClick={() => setFilter(f)}>
+            {f === "all" ? "All" : f === "base" ? "Canada (base)" : "DACH (corridor)"}
+          </button>
+        ))}
+      </div>
       <p style={{ color: "var(--color-muted)", fontSize: 14, margin: "0 0 6px" }}>
-        {complete}/{sources.length} sources complete · {pendingPages} pages pending
+        {complete}/{list.length} sources complete · {pendingPages} pages pending
         {running && msg ? ` · ${msg}` : ""}
       </p>
       <p style={{ color: "var(--color-faint)", fontSize: 12, margin: "0 0 12px" }}>
@@ -110,6 +123,9 @@ export function SourcePanel({ sources }: { sources: S[] }) {
               <div className="unit-link" style={{ cursor: "default" }}>
                 <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggle(s.id)} disabled={running} />
                 <span className={`nav-dot ${pend > 0 ? "state-in_review" : p > 0 ? "state-published" : "state-planned"}`} aria-hidden />
+                <span className={`tier-chip ${s.corridor === "base" ? "tier-factual" : "tier-interpretive"}`}>
+                  {s.corridor === "base" ? "base" : s.corridor}
+                </span>
                 <span className="source-chip">{s.id}</span>
                 <span className="unit-link-q" style={{ fontSize: 14, flex: 1 }}>
                   {s.body}
