@@ -5,8 +5,45 @@ import { useRouter } from "next/navigation";
 import type { ActionResult } from "./actions";
 import {
   assessUnit, generateUnit, addSource, addPdfSource, ingestAllStep, autopilotStep,
-  discoverSources, checkSourceFreshness,
+  discoverSources, checkSourceFreshness, setCorridor, addCorridor,
 } from "./actions";
+
+type CorridorItem = { slug: string; label: string; active: boolean };
+
+/** Pick which corridor the operator is generating for, and add new corridors. */
+export function CorridorBar({ corridors, active }: { corridors: CorridorItem[]; active: string }) {
+  const [pending, start] = useTransition();
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState("");
+  const [msg, setMsg] = useState("");
+  const router = useRouter();
+
+  return (
+    <div className="corridor-callout" style={{ borderLeftColor: "var(--color-ink)" }}>
+      <strong>Working corridor</strong>
+      <p style={{ margin: "4px 0 10px", color: "var(--color-muted)", fontSize: 14 }}>
+        Curriculum status, generation, and the corpus all apply to this corridor. Canadian
+        (base) sources are shared across all corridors.
+      </p>
+      <div className="assist-bar">
+        <select className="corridor-select" style={{ width: "auto", minWidth: 180 }} value={active} disabled={pending}
+          onChange={(e) => start(async () => { await setCorridor(e.target.value); router.refresh(); })}>
+          {corridors.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+        </select>
+        <button className="ghost-btn" onClick={() => setAdding((v) => !v)}>{adding ? "Close" : "Add corridor"}</button>
+        {msg && <span className="action-msg ok">{msg}</span>}
+      </div>
+      {adding && (
+        <div className="assist-bar" style={{ marginTop: 10 }}>
+          <input className="assist-input" placeholder="Corridor name (e.g. Austria, United Kingdom)" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <button className="book-call-btn" disabled={pending} onClick={() => start(async () => {
+            const r = await addCorridor(label); setMsg(r.message); if (r.ok) { setLabel(""); setAdding(false); router.refresh(); }
+          })}>Add</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** AI proposes official sources for a corridor; add the ones you want, then ingest. */
 export function DiscoverPanel() {

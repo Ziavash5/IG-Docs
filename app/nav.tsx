@@ -1,17 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { corridors, pathFor, type Stage } from "@/lib/content";
+import { pathFor, type Stage } from "@/lib/content";
+import { setCorridor } from "./admin/actions";
+
+type CorridorItem = { slug: string; label: string; active: boolean };
 
 /**
  * Left navigation: home-country selector, then journey stages → pillars → units.
  * The tree (`journey`) comes from the editable, DB-backed curriculum. On mobile it
  * collapses behind a toggle.
  */
-export default function Nav({ journey }: { journey: Stage[] }) {
+export default function Nav({
+  journey,
+  corridors,
+  active,
+}: {
+  journey: Stage[];
+  corridors: CorridorItem[];
+  active: string;
+}) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
@@ -34,7 +46,15 @@ export default function Nav({ journey }: { journey: Stage[] }) {
       <div className="corridor-field">
         <label htmlFor="corridor">Where your company is based</label>
         <div className="corridor-select-wrap">
-          <select id="corridor" defaultValue="germany" className="corridor-select">
+          <select
+            id="corridor"
+            value={active}
+            className="corridor-select"
+            onChange={async (e) => {
+              await setCorridor(e.target.value);
+              router.refresh();
+            }}
+          >
             {corridors.map((c) => (
               <option key={c.slug} value={c.slug} disabled={!c.active}>
                 {c.label}

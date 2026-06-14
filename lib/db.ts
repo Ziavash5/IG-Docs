@@ -150,6 +150,57 @@ export async function addPending(sourceId: string, urls: string[], maxTotal: num
   }
 }
 
+// ---- Leads (chat funnel) ----------------------------------------------------
+
+export interface LeadInput {
+  name: string; email: string; company: string; corridor: string; question: string; transcript: string;
+}
+export interface LeadRow extends LeadInput { id: string; createdAt: string; }
+
+export async function insertLead(l: LeadInput): Promise<void> {
+  const db = sql();
+  await db`
+    insert into leads (name, email, company, corridor, question, transcript)
+    values (${l.name}, ${l.email}, ${l.company}, ${l.corridor}, ${l.question}, ${l.transcript})
+  `;
+}
+
+export async function listLeads(limit = 50): Promise<LeadRow[]> {
+  const db = sql();
+  const rows = await db`select id, name, email, company, corridor, question, transcript, created_at
+                        from leads order by created_at desc limit ${limit}`;
+  return rows.map((r) => ({
+    id: String(r.id), name: r.name as string, email: r.email as string, company: r.company as string,
+    corridor: r.corridor as string, question: r.question as string, transcript: r.transcript as string,
+    createdAt: String(r.created_at),
+  }));
+}
+
+export async function leadCount(): Promise<number> {
+  const db = sql();
+  const [r] = await db`select count(*)::int as n from leads`;
+  return Number(r.n);
+}
+
+// ---- Corridors --------------------------------------------------------------
+
+export async function listCorridors(): Promise<{ slug: string; label: string }[]> {
+  const db = sql();
+  const rows = await db`select slug, label from corridors order by created_at`;
+  return rows.map((r) => ({ slug: r.slug as string, label: r.label as string }));
+}
+
+export async function insertCorridor(slug: string, label: string): Promise<void> {
+  const db = sql();
+  await db`insert into corridors (slug, label) values (${slug}, ${label})
+           on conflict (slug) do update set label = excluded.label`;
+}
+
+export async function deleteCorridor(slug: string): Promise<void> {
+  const db = sql();
+  await db`delete from corridors where slug = ${slug}`;
+}
+
 // ---- Custom sources ---------------------------------------------------------
 
 export async function listCustomSources(): Promise<Source[]> {
@@ -229,9 +280,9 @@ export interface StoredUnitInput {
 
 export async function storeUnit(u: StoredUnitInput): Promise<void> {
   const db = sql();
-  // Replace any existing unit for this slug (cascades old claims + queue), then insert
-  // fresh. Keying on slug avoids id collisions when the id scheme changes.
-  await db`delete from units where slug = ${u.slug}`;
+  // Replace this corridor's unit for the slug (cascades old claims + queue), then insert
+  // fresh. Keyed on the corridor-scoped id so other corridors are untouched.
+  await db`delete from units where id = ${u.id}`;
   await db`
     insert into units (id, slug, question, pillar, layer, corridor, jurisdictions,
                        risk_tier, status, last_reviewed, cta, body, updated_at)
@@ -371,13 +422,18 @@ export async function topicCount(): Promise<number> {
   return Number(r.n);
 }
 
-/** unit status keyed by slug, so the curriculum can show what's been generated. */
-export async function unitStatusBySlug(): Promise<Record<string, string>> {
+/** unit status keyed by slug for one corridor, so the curriculum shows what's generated. */
+export async function unitStatusBySlug(corridor: string): Promise<Record<string, string>> {
   const db = sql();
-  const rows = await db`select slug, status from units`;
+  const rows = await db`select slug, status from units where corridor = ${corridor}`;
   const out: Record<string, string> = {};
   for (const r of rows) out[r.slug as string] = r.status as string;
   return out;
+}
+
+export async function deleteUnit(id: string): Promise<void> {
+  const db = sql();
+  await db`delete from units where id = ${id}`;
 }
 
 export interface PublicUnit {
@@ -389,16 +445,16 @@ export interface PublicUnit {
   claims: { text: string; sourceId: string; locator: string; verified: boolean }[];
 }
 
-/** Generated content for a slug, for public rendering. */
-export async function getUnitContent(slug: string): Promise<PublicUnit | null> {
+/** Generated content for a corridor's slug, for public rendering. */
+export async function getUnitContent(corridor: string, slug: string): Promise<PublicUnit | null> {
   const db = sql();
   const [u] = await db`
-    select question, body, status, last_reviewed from units where slug = ${slug} limit 1
+    select id, question, body, status, last_reviewed from units
+    where corridor = ${corridor} and slug = ${slug} limit 1
   `;
   if (!u) return null;
   const claims = await db`
-    select text, source_id, locator, verified from claims
-    where unit_id = (select id from units where slug = ${slug} limit 1)
+    select text, source_id, locator, verified from claims where unit_id = ${u.id}
   `;
   return {
     question: u.question as string,

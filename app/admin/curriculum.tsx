@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addTopic, editTopic, removeTopic, generateUnit, suggest, reorder, autoOrder, checkQuality } from "./actions";
+import { addTopic, editTopic, removeTopic, generateUnit, suggest, reorder, autoOrder, checkQuality, resetUnitContent } from "./actions";
 import type { SuggestedTopic } from "@/lib/curriculum";
 
 type Risk = "factual" | "interpretive";
@@ -101,7 +101,10 @@ export function PillarEditor({
                   {pending ? "Working…" : "Generate"}
                 </button>
                 {u.state !== "planned" && (
-                  <a className="ghost-btn" href={`/admin/edit/${u.slug}`}>Edit content</a>
+                  <>
+                    <a className="ghost-btn" href={`/admin/edit/${u.slug}`}>Edit content</a>
+                    <button className="ghost-btn" disabled={pending} onClick={() => run(() => resetUnitContent(u.slug), "Clearing content…")}>Clear content</button>
+                  </>
                 )}
                 <button className="ghost-btn" onClick={() => { setEditing(u.slug); setEdit({ title: u.title, question: u.question, riskTier: u.riskTier }); }}>Rename</button>
                 <button className="ghost-btn" disabled={pending} onClick={() => run(() => removeTopic(u.slug))}>Delete</button>

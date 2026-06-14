@@ -29,11 +29,11 @@ function toState(status?: string): UnitState {
   return "planned";
 }
 
-export async function getCurriculum(): Promise<Stage[]> {
+export async function getCurriculum(corridor: string): Promise<Stage[]> {
   try {
     const topics = await listTopics();
     if (topics.length === 0) return journey; // not seeded yet
-    const statuses = await unitStatusBySlug();
+    const statuses = await unitStatusBySlug(corridor);
     const shells = pillarShells();
     for (const stage of shells) {
       for (const pillar of stage.pillars) {
@@ -55,10 +55,10 @@ export async function getCurriculum(): Promise<Stage[]> {
   }
 }
 
-/** Generated content for a slug, or null (callers fall back to the in-code exemplar). */
-export async function unitContent(slug: string): Promise<PublicUnit | null> {
+/** Generated content for a corridor's slug, or null (callers fall back to the exemplar). */
+export async function unitContent(corridor: string, slug: string): Promise<PublicUnit | null> {
   try {
-    return await getUnitContent(slug);
+    return await getUnitContent(corridor, slug);
   } catch {
     return null;
   }

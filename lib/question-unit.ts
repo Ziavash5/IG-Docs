@@ -4,15 +4,8 @@
  * docs/question-unit-spec.md and schema/question-unit.schema.json.
  */
 
-export type Corridor =
-  | "base"
-  | "germany"
-  | "uk"
-  | "usa"
-  | "australia"
-  | "newzealand"
-  | "japan"
-  | "india";
+/** Corridor slug (e.g. "base", "germany"). Dynamic: corridors are editable. */
+export type Corridor = string;
 
 export type Layer = "base" | "overlay";
 

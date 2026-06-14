@@ -33,8 +33,13 @@ import {
   addPending,
   insertCustomSource,
   deleteCustomSource,
+  deleteUnit,
+  insertCorridor,
+  deleteCorridor,
 } from "@/lib/db";
 import { runFreshnessCheck } from "@/lib/freshness";
+import { getActiveCorridor } from "@/lib/corridor";
+import { cookies } from "next/headers";
 import { anthropic, MODEL, textOf, parseJson } from "@/lib/anthropic";
 import {
   seedDefaults,
@@ -45,8 +50,6 @@ import {
   type SuggestedTopic,
 } from "@/lib/curriculum";
 import type { Corridor, RiskTier } from "@/lib/question-unit";
-
-const CORRIDOR: Corridor = "germany";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -344,14 +347,15 @@ export async function autopilotStep(): Promise<StepResult> {
       }
     }
 
-    // 2) Generate the next topic that has no unit yet.
+    // 2) Generate the next topic that has no unit yet (for the active corridor).
+    const CORRIDOR = await getActiveCorridor();
     const topics = await listTopics();
-    const statuses = await unitStatusBySlug();
+    const statuses = await unitStatusBySlug(CORRIDOR);
     const next = topics.find((t) => !statuses[t.slug] || statuses[t.slug] === "planned");
     if (!next) return { ok: true, done: true, message: "Autopilot complete." };
 
     await generateUnit(next.slug);
-    const content = await getUnitContent(next.slug);
+    const content = await getUnitContent(CORRIDOR, next.slug);
     if (!content) {
       // Generation produced nothing (sources missing): park it so it is not retried.
       await storeUnit({
@@ -516,6 +520,7 @@ export async function generateUnit(topicSlug: string, guidance?: string): Promis
   if (!topic) return { ok: false, message: "Unknown topic." };
   const pillar = pillarBySlug(topic.pillarSlug);
   if (!pillar) return { ok: false, message: "Unknown pillar." };
+  const CORRIDOR = await getActiveCorridor();
 
   try {
     const sourceIds = await selectSources(topic.question, CORRIDOR);
@@ -617,7 +622,8 @@ export async function aiAssist(
   selectedText: string,
 ): Promise<{ ok: boolean; text?: string; message?: string }> {
   try {
-    const unit = await getUnitContent(slug);
+    const CORRIDOR = await getActiveCorridor();
+    const unit = await getUnitContent(CORRIDOR, slug);
     if (!unit) return { ok: false, message: "Unit not found." };
 
     const sourceIds = await selectSources(unit.question, CORRIDOR);
@@ -664,12 +670,68 @@ export async function assessUnit(
   slug: string,
 ): Promise<{ ok: boolean; score?: number; text?: string; message?: string }> {
   try {
-    const unit = await getUnitContent(slug);
+    const unit = await getUnitContent(await getActiveCorridor(), slug);
     if (!unit) return { ok: false, message: "Unit not found." };
     const r = await assessUnitValue(unit.question, unit.body ?? "", unit.citations);
     return { ok: true, score: r.score, text: r.text };
   } catch (e) {
     return { ok: false, message: errMsg(e) };
+  }
+}
+
+/** Reject a queued unit: delete it entirely (the topic returns to not-generated). */
+export async function rejectUnit(unitId: string): Promise<ActionResult> {
+  try {
+    await deleteUnit(unitId);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Rejected and removed." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Keep the topic but delete its generated content for the active corridor. */
+export async function resetUnitContent(slug: string): Promise<ActionResult> {
+  try {
+    const corridor = await getActiveCorridor();
+    await deleteUnit(`${corridor}-${slug}`);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Content cleared. Generate again to start fresh." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Set the operator/viewer corridor (cookie). */
+export async function setCorridor(slug: string): Promise<void> {
+  (await cookies()).set("corridor", slug, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  revalidatePath("/admin");
+  revalidatePath("/", "layout");
+}
+
+export async function addCorridor(label: string): Promise<ActionResult> {
+  const slug = slugifyId(label);
+  if (!slug) return { ok: false, message: "Give the corridor a name." };
+  try {
+    await insertCorridor(slug, label.trim());
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Added corridor "${label}". Select it to generate for it.` };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function removeCorridor(slug: string): Promise<ActionResult> {
+  try {
+    await deleteCorridor(slug);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Corridor removed." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
 }
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { pathFor, findUnit as findStaticUnit, type Stage, type UnitEntry } from "@/lib/content";
 import { getCurriculum, unitContent } from "@/lib/curriculum";
+import { getActiveCorridor } from "@/lib/corridor";
 import type { PublicUnit } from "@/lib/db";
 import { BookCall } from "../components";
 
@@ -24,7 +25,7 @@ function resolve(journey: Stage[], slug: string[]) {
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
-  const r = resolve(await getCurriculum(), slug);
+  const r = resolve(await getCurriculum(await getActiveCorridor()), slug);
   if (!r) return { title: "InterGest Canada" };
   if (r.kind === "unit") return { title: `${r.unit.question} — InterGest Canada` };
   if (r.kind === "pillar") return { title: `${r.pillar.title} — InterGest Canada` };
@@ -36,14 +37,15 @@ const riskLabel = (tier: string) =>
 
 export default async function Page({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
-  const journey = await getCurriculum();
+  const corridor = await getActiveCorridor();
+  const journey = await getCurriculum(corridor);
   const r = resolve(journey, slug);
   if (!r) notFound();
 
   if (r.kind === "stage") return <StageView stage={r.stage} />;
   if (r.kind === "pillar") return <PillarView stage={r.stage} pillar={r.pillar} />;
 
-  const content = await unitContent(r.unit.slug);
+  const content = await unitContent(corridor, r.unit.slug);
   return <UnitView stageSlug={r.stage.slug} pillarSlug={r.pillar.slug} stageLabel={r.stage.label}
     pillarTitle={r.pillar.title} pillarN={r.pillar.n} unit={r.unit} content={content} />;
 }

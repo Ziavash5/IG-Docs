@@ -1,8 +1,9 @@
 import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { allSources } from "@/lib/sources-registry";
-import { openQueue, ingestStats, sourceChunkCounts, type QueueRow } from "@/lib/db";
-import { approveUnit, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton } from "./buttons";
+import { getActiveCorridor, allCorridors } from "@/lib/corridor";
+import { openQueue, ingestStats, sourceChunkCounts, listLeads, type QueueRow, type LeadRow } from "@/lib/db";
+import { approveUnit, rejectUnit, seedCurriculum } from "./actions";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar } from "./buttons";
 import { PillarEditor } from "./curriculum";
 import { SourcePanel } from "./source-panel";
 
@@ -15,12 +16,15 @@ export default async function Admin() {
   let stats: { sources: number; chunks: number } | null = null;
   let queue: QueueRow[] = [];
   let counts: Record<string, number> = {};
-  let journey = await getCurriculum();
+  let leads: LeadRow[] = [];
+  const corridor = await getActiveCorridor();
+  let journey = await getCurriculum(corridor);
   let seeded = await isSeeded();
   let sources = await allSources();
+  let corridors = await allCorridors();
   let dbError: string | null = null;
   try {
-    [stats, queue, counts] = await Promise.all([ingestStats(), openQueue(), sourceChunkCounts()]);
+    [stats, queue, counts, leads] = await Promise.all([ingestStats(), openQueue(), sourceChunkCounts(), listLeads(50)]);
   } catch (e) {
     dbError = e instanceof Error ? e.message : String(e);
   }
@@ -55,6 +59,8 @@ export default async function Admin() {
         </p>
         <AutopilotButton />
       </div>
+
+      <CorridorBar corridors={corridors} active={corridor} />
 
       {/* 1 — Curriculum */}
       <h2>1 · Curriculum</h2>
@@ -149,11 +155,34 @@ export default async function Admin() {
           <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
             <ActionButton action={approveUnit.bind(null, row.unitId)} idleLabel="Approve & publish" busyLabel="Publishing…" variant="primary" />
             <a className="ghost-btn" href={`/admin/edit/${row.slug}`}>Edit content</a>
+            <ActionButton action={rejectUnit.bind(null, row.unitId)} idleLabel="Reject" busyLabel="Rejecting…" />
           </div>
           <RegenerateBox slug={row.slug} />
           <div style={{ marginTop: 10 }}>
             <AssessButton slug={row.slug} />
           </div>
+        </div>
+      ))}
+
+      {/* 4 — Leads from the chat funnel */}
+      <h2 style={{ marginTop: 48 }}>4 · Leads ({leads.length})</h2>
+      <p style={{ color: "var(--color-muted)" }}>
+        People who asked the assistant to follow up. Reach out to convert them to a call.
+      </p>
+      {leads.length === 0 && <p style={{ color: "var(--color-faint)", fontSize: 14 }}>No leads yet.</p>}
+      {leads.map((l) => (
+        <div key={l.id} className="corridor-callout">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <strong>{l.name} · <a href={`mailto:${l.email}`}>{l.email}</a></strong>
+            <span style={{ color: "var(--color-faint)", fontSize: 13 }}>{l.company} · {l.corridor} · {l.createdAt.slice(0, 10)}</span>
+          </div>
+          {l.question && <p style={{ margin: "8px 0 0", fontSize: 14 }}><em>Asked:</em> {l.question}</p>}
+          {l.transcript && (
+            <details className="draft-preview">
+              <summary>Conversation</summary>
+              <pre>{l.transcript}</pre>
+            </details>
+          )}
         </div>
       ))}
     </div>

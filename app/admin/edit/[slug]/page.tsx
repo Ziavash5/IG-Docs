@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getUnitContent } from "@/lib/db";
+import { getActiveCorridor } from "@/lib/corridor";
 import { UnitEditor } from "../../editor";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export default async function EditPage({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   let unit;
   try {
-    unit = await getUnitContent(slug);
+    unit = await getUnitContent(await getActiveCorridor(), slug);
   } catch {
     unit = null;
   }

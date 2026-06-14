@@ -3,6 +3,7 @@ import "./globals.css";
 import Nav from "./nav";
 import ChatWidget from "./chat-widget";
 import { getCurriculum } from "@/lib/curriculum";
+import { getActiveCorridor, allCorridors } from "@/lib/corridor";
 
 export const metadata: Metadata = {
   title: "InterGest Canada — The Art of Being Local in Canada",
@@ -16,12 +17,13 @@ export const metadata: Metadata = {
  * placeholder tree until units are wired from the corpus.
  */
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const journey = await getCurriculum();
+  const corridor = await getActiveCorridor();
+  const [journey, corridors] = await Promise.all([getCurriculum(corridor), allCorridors()]);
   return (
     <html lang="en">
       <body>
         <div className="shell">
-          <Nav journey={journey} />
+          <Nav journey={journey} corridors={corridors} active={corridor} />
           <main className="content">
             <div className="col">{children}</div>
           </main>
