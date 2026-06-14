@@ -59,6 +59,12 @@ export const SOURCE_REGISTRY: Source[] = [
   { id: "de-ustg", body: "Umsatzsteuergesetz (DE) — German VAT (full text)", corridor: "germany",
     url: "https://www.gesetze-im-internet.de/ustg_1980/",
     crawl: { prefix: "https://www.gesetze-im-internet.de/ustg_1980/", max: 25 } },
+  { id: "ca-eu-ceta", body: "Global Affairs Canada — CETA (EU trade agreement)", corridor: "germany",
+    url: "https://www.international.gc.ca/trade-commerce/trade-agreements-accords-commerciaux/agr-acc/ceta-aecg/index.aspx",
+    crawl: { prefix: "https://www.international.gc.ca/trade-commerce/trade-agreements-accords-commerciaux/agr-acc/ceta-aecg", max: 15 } },
+  { id: "ircc-iec", body: "IRCC — International Experience Canada (youth mobility)", corridor: "germany",
+    url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada/iec.html",
+    crawl: { prefix: "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada/iec", max: 15 } },
 ];
 
 /** Built-in registry plus any sources added from the console. */

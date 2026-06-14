@@ -2,7 +2,7 @@ import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { allSources } from "@/lib/sources-registry";
 import { openQueue, ingestStats, sourceChunkCounts, type QueueRow } from "@/lib/db";
 import { approveUnit, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton } from "./buttons";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton } from "./buttons";
 import { PillarEditor } from "./curriculum";
 import { SourcePanel } from "./source-panel";
 
@@ -106,6 +106,8 @@ export default async function Admin() {
       </p>
       <AddSourceForm />
       <PdfUploadForm />
+      <DiscoverPanel />
+      <FreshnessButton sourceIds={sources.filter((s) => !s.id.startsWith("custom-pdf-")).map((s) => s.id)} />
       <SourcePanel
         sources={sources.map((s) => ({ id: s.id, body: s.body, custom: s.id.startsWith("custom-"), corridor: s.corridor }))}
       />

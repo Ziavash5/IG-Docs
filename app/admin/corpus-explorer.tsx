@@ -51,6 +51,34 @@ export function CorpusExplorer({ sources }: { sources: Src[] }) {
         <a href="/admin" className="ghost-btn" style={{ marginLeft: 10 }}>Back to console</a>
       </p>
 
+      {sources.length > 0 && (
+        <div className="corpus-map">
+          {["base", ...Array.from(new Set(sources.map((s) => s.corridor))).filter((c) => c !== "base")].map((group) => {
+            const inGroup = sources.filter((s) => s.corridor === group);
+            if (inGroup.length === 0) return null;
+            return (
+              <div key={group} className="map-group">
+                <p className="map-group-label">{group === "base" ? "Canada (base layer)" : `${group} (corridor)`}</p>
+                <div className="map-bubbles">
+                  {inGroup.map((s) => {
+                    const size = Math.max(48, Math.min(124, 40 + Math.sqrt(s.passages) * 5));
+                    return (
+                      <button key={s.id} className={`map-bubble ${group === "base" ? "is-base" : "is-corridor"}`}
+                        style={{ width: size, height: size }}
+                        title={`${s.id} · ${s.passages} passages`}
+                        onClick={() => { setSource(s.id); browse(0); }}>
+                        <span className="map-bubble-n">{s.passages}</span>
+                        <span className="map-bubble-id">{s.id}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="assist-bar" style={{ margin: "16px 0" }}>
         <input className="assist-input" placeholder="Search the corpus (e.g. GST small-supplier threshold)…"
           value={query} onChange={(e) => setQuery(e.target.value)}

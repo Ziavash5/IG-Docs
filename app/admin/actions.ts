@@ -33,8 +33,12 @@ import {
   addPending,
   insertCustomSource,
   deleteCustomSource,
+  getSourceHash,
+  setSourceHash,
+  flagUnitsForSource,
 } from "@/lib/db";
-import { anthropic, MODEL, textOf } from "@/lib/anthropic";
+import { createHash } from "node:crypto";
+import { anthropic, MODEL, textOf, parseJson } from "@/lib/anthropic";
 import {
   seedDefaults,
   suggestTopics,
@@ -445,6 +449,65 @@ export async function addPdfSource(formData: FormData): Promise<ActionResult> {
     return { ok: true, message: `Added “${name}” with ${chunks.length} passages.` };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** AI proposes official sources for a corridor (you verify by adding + ingesting). */
+export async function discoverSources(
+  corridor: string,
+): Promise<{ ok: boolean; message?: string; sources: { body: string; url: string }[] }> {
+  try {
+    const existing = (await allSources()).map((s) => `${s.body} ${s.url}`);
+    const msg = await anthropic().messages.create({
+      model: MODEL,
+      max_tokens: 1500,
+      thinking: { type: "adaptive" },
+      system:
+        "You propose OFFICIAL government bodies and primary-law sources (with real canonical " +
+        "URLs) relevant to a company from the given country setting up or operating in Canada. " +
+        "Only official/government/primary-law sites — no blogs, firms, or commentary. Prefer " +
+        "pages that carry substantive rules. Do not repeat sources already listed. Respond with " +
+        "a single JSON object.",
+      messages: [
+        {
+          role: "user",
+          content:
+            `Country/corridor: ${corridor}\n\nAlready in the registry:\n${existing.join("\n")}\n\n` +
+            `Return JSON: {"sources": [{"body": "name", "url": "https://…"}]} with up to 8 new official sources.`,
+        },
+      ],
+    });
+    const parsed = parseJson<{ sources: { body: string; url: string }[] }>(textOf(msg));
+    const sources = (parsed.sources ?? []).filter((s) => s.body && /^https?:\/\//.test(s.url));
+    return { ok: true, sources };
+  } catch (e) {
+    return { ok: false, message: errMsg(e), sources: [] };
+  }
+}
+
+/** Re-fetch a source's seed page, detect a content change, and flag units that cite it. */
+export async function checkSourceFreshness(
+  sourceId: string,
+): Promise<{ ok: boolean; changed: boolean; flagged: number; message: string }> {
+  const source = (await allSources()).find((s) => s.id === sourceId);
+  if (!source) return { ok: false, changed: false, flagged: 0, message: "Unknown source." };
+  if (sourceId.startsWith("custom-pdf-")) {
+    return { ok: true, changed: false, flagged: 0, message: `${sourceId}: uploaded file (skipped).` };
+  }
+  try {
+    const page = await fetchPage(source.url);
+    if (!page) return { ok: true, changed: false, flagged: 0, message: `${sourceId}: unreachable.` };
+    const hash = createHash("sha256").update(page.text).digest("hex");
+    const prev = await getSourceHash(sourceId);
+    await setSourceHash(sourceId, hash);
+    if (prev && prev !== hash) {
+      const flagged = await flagUnitsForSource(sourceId);
+      revalidatePath("/admin");
+      return { ok: true, changed: true, flagged, message: `${sourceId}: CHANGED — ${flagged} unit(s) flagged for review.` };
+    }
+    return { ok: true, changed: false, flagged: 0, message: `${sourceId}: ${prev ? "unchanged" : "baseline saved"}.` };
+  } catch (e) {
+    return { ok: false, changed: false, flagged: 0, message: `${sourceId}: ${errMsg(e)}` };
   }
 }
 

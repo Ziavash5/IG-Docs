@@ -67,6 +67,35 @@ export async function clearSourceData(sourceId: string): Promise<void> {
   await db`delete from ingest_queue where source_id = ${sourceId}`;
 }
 
+export async function getSourceHash(sourceId: string): Promise<string | null> {
+  const db = sql();
+  const [r] = await db`select content_hash from sources where id = ${sourceId}`;
+  return (r?.content_hash as string) ?? null;
+}
+
+export async function setSourceHash(sourceId: string, hash: string): Promise<void> {
+  const db = sql();
+  await db`update sources set content_hash = ${hash}, last_checked = now() where id = ${sourceId}`;
+}
+
+/** A source changed: send any published unit that cites it back to review. Returns count. */
+export async function flagUnitsForSource(sourceId: string): Promise<number> {
+  const db = sql();
+  const rows = await db`
+    select distinct unit_id from claims where source_id = ${sourceId}
+      and unit_id in (select id from units where status = 'published')
+  `;
+  let n = 0;
+  for (const r of rows) {
+    const unitId = r.unit_id as string;
+    await db`update units set status = 'in_review', updated_at = now() where id = ${unitId}`;
+    await db`update review_queue set resolved_at = now() where unit_id = ${unitId} and resolved_at is null`;
+    await db`insert into review_queue (unit_id, reason) values (${unitId}, 'source-changed')`;
+    n++;
+  }
+  return n;
+}
+
 /** Pending/done page counts for every source, for live progress. */
 export async function allQueueCounts(): Promise<Record<string, { pending: number; done: number }>> {
   const db = sql();
