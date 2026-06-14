@@ -673,6 +673,106 @@ export async function aiAssist(
   }
 }
 
+export type EditSuggestion = {
+  reason: string;
+  mode: "insert_after" | "replace" | "append_section";
+  anchor: string;
+  newText: string;
+  sourceIds: string[];
+};
+
+const noEmDash = (s: string) => s.replace(/\s*—\s*/g, ", ");
+
+/**
+ * Grounded "enhance this draft" pass. Reads the whole body plus the unit's official
+ * source spans, then proposes a small set of precise, source-backed edits the operator
+ * approves or rejects one by one. Unlike regenerate (which overwrites), this preserves
+ * what is already good and only fills the specific gaps the sources can support. Same
+ * no-hallucination contract: every suggestion must be backed by a retrieved span.
+ */
+export async function suggestEdits(
+  slug: string,
+): Promise<{ ok: boolean; suggestions?: EditSuggestion[]; message?: string }> {
+  try {
+    const CORRIDOR = await getActiveCorridor();
+    const unit = await getUnitContent(CORRIDOR, slug);
+    if (!unit) return { ok: false, message: "Unit not found." };
+    const body = unit.body ?? "";
+    if (!body.trim()) return { ok: false, message: "Nothing to enhance yet. Generate a draft first." };
+
+    const sourceIds = await selectSources(unit.question, CORRIDOR);
+    const spans = await retrieveSpans(unit.question, sourceIds, 16);
+    if (spans.length === 0) {
+      return { ok: false, message: "No source passages available — ingest the relevant sources first." };
+    }
+    const knownSources = new Set(spans.map((s) => s.chunk.sourceId));
+    const spanList = spans
+      .map((s, i) => `[span ${i}] sourceId=${s.chunk.sourceId}\n${s.chunk.text}`)
+      .join("\n\n");
+
+    const parsed = await jsonCall<{ suggestions: EditSuggestion[] }>({
+      maxTokens: 4000,
+      schema: {
+        type: "object", additionalProperties: false, required: ["suggestions"],
+        properties: {
+          suggestions: {
+            type: "array",
+            items: {
+              type: "object", additionalProperties: false,
+              required: ["reason", "mode", "anchor", "newText", "sourceIds"],
+              properties: {
+                reason: { type: "string" },
+                mode: { type: "string", enum: ["insert_after", "replace", "append_section"] },
+                anchor: { type: "string" },
+                newText: { type: "string" },
+                sourceIds: { type: "array", items: { type: "string" } },
+              },
+            },
+          },
+        },
+      },
+      system:
+        "You improve an existing piece of authoritative cross-border guidance by proposing a " +
+        "small set of precise, surgical edits. You may use ONLY the official source spans " +
+        "provided. Never invent figures, thresholds, section numbers, or rules; if a span does " +
+        "not support a detail, do not propose it. Find material facts, figures, conditions, or " +
+        "exceptions that the spans support but the draft omits, gets vague about, or under-explains. " +
+        "Preserve what is already good: propose additions and tightenings, not a rewrite. No " +
+        "meta-commentary (no 'general information', no mention of sources or AI in the prose). " +
+        "Match the draft's clear, specific, plain-English voice. Never use em-dashes.\n\n" +
+        "For each suggestion:\n" +
+        "- reason: one sentence on what is missing or weak and why this helps the reader.\n" +
+        "- mode: 'insert_after' (add new text after an anchor), 'replace' (swap an anchor for " +
+        "stronger text), or 'append_section' (add a new section at the end).\n" +
+        "- anchor: for insert_after/replace, copy a SHORT, VERBATIM, UNIQUE snippet (5 to 12 words) " +
+        "from the current draft that marks the spot, exactly as written. For append_section, use \"\".\n" +
+        "- newText: the markdown to insert or the replacement text. Use '##' for any new heading and " +
+        "'- ' for lists. Same voice. No em-dashes.\n" +
+        "- sourceIds: the source ids (from the spans) that back the new facts.\n\n" +
+        "Return the 3 to 7 highest-value suggestions. If the draft already fully reflects the spans, " +
+        "return an empty list.",
+      user:
+        `Question this unit answers: ${unit.question}\n\n` +
+        `Current draft (markdown):\n"""\n${body}\n"""\n\n` +
+        `Official source spans you may use:\n${spanList}`,
+    });
+
+    // Enforce grounding + anchorability: keep only suggestions backed by a real span source,
+    // and (for non-append modes) whose anchor actually exists in the draft.
+    const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+    const bodyNorm = norm(body);
+    const suggestions = (parsed.suggestions ?? [])
+      .map((s) => ({ ...s, newText: noEmDash(s.newText), reason: noEmDash(s.reason) }))
+      .filter((s) => s.newText.trim().length > 0)
+      .filter((s) => s.sourceIds.some((id) => knownSources.has(id)))
+      .filter((s) => s.mode === "append_section" || (s.anchor.trim() && bodyNorm.includes(norm(s.anchor))));
+
+    return { ok: true, suggestions };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
 /** AI value assessment of a generated unit (specificity, grounding, usefulness). */
 export async function assessUnit(
   slug: string,

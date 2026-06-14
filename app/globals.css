@@ -447,6 +447,33 @@ h1, h2, h3, p, li, td, th, .source-chip { overflow-wrap: break-word; }
 }
 .editor-area:focus, .assist-input:focus { outline: none; border-color: var(--color-brand); }
 
+/* ---- Grounded suggest-and-approve edits (editor) -------------------------- */
+.suggest-edit {
+  border: 1px solid var(--color-line);
+  border-left: 3px solid var(--color-brand);
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  transition: opacity 0.15s;
+}
+.suggest-edit.is-applied { border-left-color: #2f9e5e; background: #f6fbf7; }
+.suggest-edit.is-rejected { opacity: 0.5; }
+.suggest-edit-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.suggest-edit-reason { font-family: var(--font-head); font-weight: 600; font-size: 14.5px; flex: 1; min-width: 0; }
+.suggest-edit-anchor { font-size: 12.5px; color: var(--color-faint); margin: 8px 0 0; }
+.suggest-edit-new {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.55;
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.suggest-edit-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
 .draft-preview { margin: 10px 0; }
 .draft-preview summary { cursor: pointer; font-family: var(--font-head); font-size: 13px; font-weight: 600; color: var(--color-brand); }
 .draft-preview pre {
