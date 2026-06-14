@@ -397,6 +397,30 @@ h1, h2, h3, p, li, td, th, .source-chip { overflow-wrap: break-word; }
   border-radius: 8px; margin-bottom: 6px; background: var(--color-bg-soft);
 }
 
+/* Source list (ingest panel): a clean stacked row that can't be broken by long
+   values. Title on its own line; corridor / id / status as small meta below. */
+.source-list { list-style: none; padding: 0; margin: 10px 0; }
+.source-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; flex-wrap: wrap;
+  padding: 14px 2px; border-top: 1px solid var(--color-line);
+}
+.source-list li:last-child { border-bottom: 1px solid var(--color-line); }
+.source-row-main { display: flex; align-items: flex-start; gap: 10px; flex: 1 1 320px; min-width: 0; }
+.source-row-text { min-width: 0; flex: 1; }
+.source-row-title { font-size: 15px; line-height: 1.4; color: var(--color-ink); overflow-wrap: break-word; }
+.source-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 6px; font-size: 12px; color: var(--color-faint); }
+.corridor-tag {
+  font-family: var(--font-head); font-size: 11px; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--color-bg-soft); border: 1px solid var(--color-brand-soft); color: #8a6320;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.corridor-tag.is-base { background: #e7f4ec; border-color: #bfe3cd; color: #1f7a47; }
+.source-row-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--color-muted); word-break: break-all; }
+.source-row-status { display: inline-flex; align-items: center; gap: 6px; }
+.source-row-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex-shrink: 0; }
+
 .action-cell { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .action-msg { font-size: 13px; }
 .action-msg.ok { color: #1f7a47; }

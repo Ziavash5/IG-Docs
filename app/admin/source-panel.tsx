@@ -114,25 +114,30 @@ export function SourcePanel({ sources }: { sources: S[] }) {
         loop; click Continue unfinished to resume.
       </p>
 
-      <ul className="unit-list">
+      <ul className="source-list">
         {list.map((s) => {
           const p = s.st?.passages ?? 0;
           const pend = s.st?.pending ?? 0;
+          const dot = pend > 0 ? "state-in_review" : p > 0 ? "state-published" : "state-planned";
           return (
-            <li key={s.id}>
-              <div className="unit-link" style={{ cursor: "default" }}>
-                <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggle(s.id)} disabled={running} />
-                <span className={`nav-dot ${pend > 0 ? "state-in_review" : p > 0 ? "state-published" : "state-planned"}`} aria-hidden />
-                <span className={`tier-chip ${s.corridor === "base" ? "tier-factual" : "tier-interpretive"}`}>
-                  {s.corridor === "base" ? "base" : s.corridor}
-                </span>
-                <span className="source-chip">{s.id}</span>
-                <span className="unit-link-q" style={{ fontSize: 14, flex: 1 }}>
-                  {s.body}
-                  <span style={{ color: "var(--color-faint)", marginLeft: 8 }}>
-                    {p > 0 ? `${p} passages` : "not ingested"}{pend > 0 ? ` · ${pend} pending` : ""}
-                  </span>
-                </span>
+            <li key={s.id} className="source-row">
+              <div className="source-row-main">
+                <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggle(s.id)} disabled={running} style={{ marginTop: 3 }} />
+                <div className="source-row-text">
+                  <div className="source-row-title">{s.body}</div>
+                  <div className="source-row-meta">
+                    <span className={`corridor-tag ${s.corridor === "base" ? "is-base" : ""}`} title={s.corridor}>
+                      {s.corridor === "base" ? "Canada (base)" : s.corridor}
+                    </span>
+                    <code className="source-row-id">{s.id}</code>
+                    <span className="source-row-status">
+                      <span className={`nav-dot ${dot}`} aria-hidden />
+                      {p > 0 ? `${p} passages` : "not ingested"}{pend > 0 ? ` · ${pend} pending` : ""}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="source-row-actions">
                 {!s.id.startsWith("custom-pdf-") && (
                   <>
                     <button className="ghost-btn" disabled={running} onClick={drive(() => loop(() => ingestSourceStep(s.id)))}>

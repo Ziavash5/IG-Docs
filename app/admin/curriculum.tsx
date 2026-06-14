@@ -92,7 +92,6 @@ export function PillarEditor({
                   <button className="reorder-btn" disabled={pending || i === units.length - 1} onClick={() => move(i, 1)} aria-label="Move down">▼</button>
                 </span>
                 <span className={`nav-dot state-${u.state}`} aria-hidden />
-                <span className={`tier-chip tier-${u.riskTier}`}>{u.riskTier}</span>
                 <span className="unit-link-q" style={{ fontSize: 14, flex: 1 }}>
                   {u.question}
                   <span style={{ color: "var(--color-faint)", marginLeft: 8 }}>{stateLabel[u.state] ?? u.state}</span>
@@ -142,7 +141,6 @@ export function PillarEditor({
         <ul className="suggest-list">
           {suggestions.map((s, i) => (
             <li key={i}>
-              <span className={`tier-chip tier-${s.riskTier}`}>{s.riskTier}</span>
               <span style={{ flex: 1, fontSize: 14 }}>{s.question}</span>
               <button className="ghost-btn" disabled={pending}
                 onClick={() => {
