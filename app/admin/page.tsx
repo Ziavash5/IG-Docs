@@ -3,7 +3,8 @@ import { allSources } from "@/lib/sources-registry";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
 import { openQueue, ingestStats, sourceChunkCounts, listLeads, type QueueRow, type LeadRow } from "@/lib/db";
 import { approveUnit, rejectUnit, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar } from "./buttons";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar, CtaSettings } from "./buttons";
+import { getCta } from "@/lib/cta";
 import { PillarEditor } from "./curriculum";
 import { SourcePanel } from "./source-panel";
 
@@ -22,6 +23,7 @@ export default async function Admin() {
   let seeded = await isSeeded();
   let sources = await allSources();
   let corridors = await allCorridors();
+  let cta = await getCta();
   let dbError: string | null = null;
   try {
     [stats, queue, counts, leads] = await Promise.all([ingestStats(), openQueue(), sourceChunkCounts(), listLeads(50)]);
@@ -185,6 +187,14 @@ export default async function Admin() {
           )}
         </div>
       ))}
+
+      {/* 5 — Settings */}
+      <h2 style={{ marginTop: 48 }}>5 · Settings</h2>
+      <p style={{ color: "var(--color-muted)" }}>
+        The booking CTA shown at the bottom of guides, cited in <code>/llms.txt</code>, and
+        offered in the chat. Use your Calendly/booking URL when ready.
+      </p>
+      <CtaSettings label={cta.label} url={cta.url} />
     </div>
   );
 }

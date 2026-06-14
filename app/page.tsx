@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { journey, pathFor } from "@/lib/content";
+import { getActiveCorridor } from "@/lib/corridor";
 import { BookCall } from "./components";
 
-export default function Home() {
+export default async function Home() {
+  const corridor = await getActiveCorridor();
   return (
     <>
       <p className="eyebrow">InterGest Canada</p>
@@ -67,7 +69,7 @@ export default function Home() {
           </p>
           <div className="card-grid">
             {stage.pillars.map((p) => (
-              <Link key={p.slug} href={pathFor(stage.slug, p.slug)} className="card">
+              <Link key={p.slug} href={pathFor(corridor, stage.slug, p.slug)} className="card">
                 <span className="card-n">Pillar {p.n}</span>
                 <h3>{p.title}</h3>
                 <p className="card-service">{p.service}</p>

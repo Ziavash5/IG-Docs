@@ -309,8 +309,10 @@ export const journey: Stage[] = [
 
 // ---- Resolvers ---------------------------------------------------------------
 
-export const pathFor = (stage: string, pillar: string, unit?: string): string =>
-  unit ? `/${stage}/${pillar}/${unit}` : `/${stage}/${pillar}`;
+export const pathFor = (corridor: string, stage: string, pillar?: string, unit?: string): string => {
+  const parts = [corridor, stage, pillar, unit].filter(Boolean);
+  return `/${parts.join("/")}`;
+};
 
 export function findStage(stageSlug: string): Stage | undefined {
   return journey.find((s) => s.slug === stageSlug);

@@ -5,8 +5,28 @@ import { useRouter } from "next/navigation";
 import type { ActionResult } from "./actions";
 import {
   assessUnit, generateUnit, addSource, addPdfSource, ingestAllStep, autopilotStep,
-  discoverSources, checkSourceFreshness, setCorridor, addCorridor,
+  discoverSources, checkSourceFreshness, setCorridor, addCorridor, saveCta,
 } from "./actions";
+
+/** Edit the booking CTA used on guides, in llms.txt, and the chat. */
+export function CtaSettings({ label, url }: { label: string; url: string }) {
+  const [l, setL] = useState(label);
+  const [u, setU] = useState(url);
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState("");
+  return (
+    <div className="topic-edit" style={{ maxWidth: 720 }}>
+      <label style={{ fontSize: 12, color: "var(--color-faint)" }}>CTA label (what LLMs cite)</label>
+      <input className="assist-input" value={l} onChange={(e) => setL(e.target.value)} />
+      <label style={{ fontSize: 12, color: "var(--color-faint)" }}>CTA URL (Calendly, booking page, or mailto)</label>
+      <input className="assist-input" value={u} onChange={(e) => setU(e.target.value)} />
+      <div className="topic-edit-row">
+        <button className="book-call-btn" disabled={pending} onClick={() => start(async () => setMsg((await saveCta(l, u)).message))}>Save CTA</button>
+        {msg && <span className="action-msg ok">{msg}</span>}
+      </div>
+    </div>
+  );
+}
 
 type CorridorItem = { slug: string; label: string; active: boolean };
 

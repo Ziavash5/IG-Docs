@@ -36,6 +36,7 @@ import {
   deleteUnit,
   insertCorridor,
   deleteCorridor,
+  setSetting,
 } from "@/lib/db";
 import { runFreshnessCheck } from "@/lib/freshness";
 import { getActiveCorridor } from "@/lib/corridor";
@@ -704,6 +705,19 @@ export async function resetUnitContent(slug: string): Promise<ActionResult> {
     revalidatePath("/admin");
     revalidatePath("/", "layout");
     return { ok: true, message: "Content cleared. Generate again to start fresh." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Save the booking CTA (label + URL) used on guides, in llms.txt, and the chat. */
+export async function saveCta(label: string, url: string): Promise<ActionResult> {
+  try {
+    await setSetting("cta_label", label.trim());
+    await setSetting("cta_url", url.trim());
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "CTA saved." };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }

@@ -51,8 +51,13 @@ export default function Nav({
             value={active}
             className="corridor-select"
             onChange={async (e) => {
-              await setCorridor(e.target.value);
-              router.refresh();
+              const next = e.target.value;
+              await setCorridor(next);
+              // Swap the corridor segment in the URL so content stays crawlable per corridor.
+              const parts = (pathname || "/").split("/").filter(Boolean);
+              if (parts.length > 0 && corridors.some((c) => c.slug === parts[0])) parts[0] = next;
+              else parts.unshift(next);
+              router.push(`/${parts.join("/")}`);
             }}
           >
             {corridors.map((c) => (
@@ -69,14 +74,14 @@ export default function Nav({
         {journey.map((stage) => (
           <section key={stage.slug} className="nav-stage">
             <Link
-              href={pathFor(stage.slug, stage.pillars[0].slug)}
+              href={pathFor(active, stage.slug, stage.pillars[0].slug)}
               className="nav-stage-label"
               onClick={close}
             >
               {stage.label}
             </Link>
             {stage.pillars.map((pillar) => {
-              const pillarPath = pathFor(stage.slug, pillar.slug);
+              const pillarPath = pathFor(active, stage.slug, pillar.slug);
               const inPillar = pathname.startsWith(pillarPath);
               return (
                 <div key={pillar.slug} className="nav-pillar">
@@ -90,18 +95,18 @@ export default function Nav({
                   </Link>
                   <ul className="nav-units">
                     {pillar.units.map((u) => {
-                      const href = pathFor(stage.slug, pillar.slug, u.slug);
-                      const active = pathname === href;
+                      const href = pathFor(active, stage.slug, pillar.slug, u.slug);
+                      const isActive = pathname === href;
                       const planned = u.state === "planned";
                       return (
                         <li key={u.slug}>
                           <Link
                             href={href}
                             onClick={close}
-                            className={`nav-unit${active ? " is-active" : ""}${
+                            className={`nav-unit${isActive ? " is-active" : ""}${
                               planned ? " is-planned" : ""
                             }`}
-                            aria-current={active ? "page" : undefined}
+                            aria-current={isActive ? "page" : undefined}
                           >
                             <span className={`nav-dot state-${u.state}`} aria-hidden />
                             {u.title}

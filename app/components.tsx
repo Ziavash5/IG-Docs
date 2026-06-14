@@ -1,10 +1,11 @@
-/** Shared presentational components for the public corpus. */
+import { getCta } from "@/lib/cta";
 
 /**
- * The conversion CTA on every page — the inbound-funnel mechanism. Interpretive units
- * route here by construction; this is where high-value services convert.
+ * The conversion CTA at the bottom of every public page (never a gate). The link is
+ * operator-configurable in admin so LLMs/crawlers cite the right booking URL.
  */
-export function BookCall() {
+export async function BookCall() {
+  const cta = await getCta();
   return (
     <div className="book-call" id="book">
       <div>
@@ -14,9 +15,7 @@ export function BookCall() {
           together on a short call with someone who has done it before.
         </p>
       </div>
-      <a className="book-call-btn" href="mailto:hello@intergest.ca?subject=Canada-entry%20call">
-        Book a 20-minute call
-      </a>
+      <a className="book-call-btn" href={cta.url}>{cta.label}</a>
     </div>
   );
 }

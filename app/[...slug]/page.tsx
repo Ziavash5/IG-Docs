@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { pathFor, findUnit as findStaticUnit, type Stage, type UnitEntry } from "@/lib/content";
 import { getCurriculum, unitContent } from "@/lib/curriculum";
-import { getActiveCorridor } from "@/lib/corridor";
 import type { PublicUnit } from "@/lib/db";
 import { BookCall } from "../components";
 
@@ -25,8 +24,8 @@ function resolve(journey: Stage[], slug: string[]) {
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
-  const corridor = await getActiveCorridor();
-  const r = resolve(await getCurriculum(corridor), slug);
+  const corridor = slug[0];
+  const r = resolve(await getCurriculum(corridor), slug.slice(1));
   if (!r) return { title: "InterGest Canada" };
   const canonical = `/${slug.join("/")}`;
   if (r.kind === "unit") {
@@ -45,16 +44,16 @@ const riskLabel = (tier: string) =>
 
 export default async function Page({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
-  const corridor = await getActiveCorridor();
+  const corridor = slug[0];
   const journey = await getCurriculum(corridor);
-  const r = resolve(journey, slug);
+  const r = resolve(journey, slug.slice(1));
   if (!r) notFound();
 
-  if (r.kind === "stage") return <StageView stage={r.stage} />;
-  if (r.kind === "pillar") return <PillarView stage={r.stage} pillar={r.pillar} />;
+  if (r.kind === "stage") return <StageView corridor={corridor} stage={r.stage} />;
+  if (r.kind === "pillar") return <PillarView corridor={corridor} stage={r.stage} pillar={r.pillar} />;
 
   const content = await unitContent(corridor, r.unit.slug);
-  return <UnitView stageSlug={r.stage.slug} pillarSlug={r.pillar.slug} stageLabel={r.stage.label}
+  return <UnitView stageLabel={r.stage.label}
     pillarTitle={r.pillar.title} pillarN={r.pillar.n} unit={r.unit} content={content} />;
 }
 
@@ -83,14 +82,14 @@ function Markdown({ text }: { text: string }) {
 
 // ---- Stage landing ----------------------------------------------------------
 
-function StageView({ stage }: { stage: Stage }) {
+function StageView({ corridor, stage }: { corridor: string; stage: Stage }) {
   return (
     <>
       <p className="eyebrow">{stage.label}</p>
       <h1 style={{ fontSize: 40 }}>{stage.tagline}</h1>
       <div className="card-grid">
         {stage.pillars.map((p) => (
-          <Link key={p.slug} href={pathFor(stage.slug, p.slug)} className="card">
+          <Link key={p.slug} href={pathFor(corridor, stage.slug, p.slug)} className="card">
             <span className="card-n">Pillar {p.n}</span>
             <h3>{p.title}</h3>
             <p className="card-service">{p.service}</p>
@@ -105,7 +104,7 @@ function StageView({ stage }: { stage: Stage }) {
 
 // ---- Pillar landing ---------------------------------------------------------
 
-function PillarView({ stage, pillar }: { stage: Stage; pillar: Stage["pillars"][number] }) {
+function PillarView({ corridor, stage, pillar }: { corridor: string; stage: Stage; pillar: Stage["pillars"][number] }) {
   return (
     <>
       <p className="eyebrow">{stage.label} · Pillar {pillar.n}</p>
@@ -115,7 +114,7 @@ function PillarView({ stage, pillar }: { stage: Stage; pillar: Stage["pillars"][
       <ul className="unit-list">
         {pillar.units.map((u) => (
           <li key={u.slug}>
-            <Link href={pathFor(stage.slug, pillar.slug, u.slug)} className="unit-link">
+            <Link href={pathFor(corridor, stage.slug, pillar.slug, u.slug)} className="unit-link">
               <span className={`nav-dot state-${u.state}`} aria-hidden />
               <span className="unit-link-q">{u.question}</span>
               <span className={`tier-chip tier-${u.riskTier}`}>{riskLabel(u.riskTier)}</span>
@@ -133,7 +132,7 @@ function PillarView({ stage, pillar }: { stage: Stage; pillar: Stage["pillars"][
 function UnitView({
   stageLabel, pillarTitle, pillarN, unit, content,
 }: {
-  stageSlug: string; pillarSlug: string; stageLabel: string;
+  stageLabel: string;
   pillarTitle: string; pillarN: number; unit: UnitEntry; content: PublicUnit | null;
 }) {
   // Prefer generated content from the DB; otherwise fall back to the in-code exemplar.
@@ -175,6 +174,12 @@ function UnitView({
           {badge}
         </span>
       </div>
+      {hasGenerated && (content!.lastReviewed || content!.author) && (
+        <p className="reviewed-meta">
+          Last reviewed {content!.lastReviewed ?? "recently"}
+          {content!.author ? ` by ${content!.author}${content!.credentials ? `, ${content!.credentials}` : ""}` : ""}.
+        </p>
+      )}
 
       {hasGenerated ? (
         <>

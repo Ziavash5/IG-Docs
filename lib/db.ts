@@ -194,6 +194,20 @@ export async function leadCount(): Promise<number> {
   return Number(r.n);
 }
 
+// ---- Settings ---------------------------------------------------------------
+
+export async function getSetting(key: string): Promise<string | null> {
+  const db = sql();
+  const [r] = await db`select value from settings where key = ${key}`;
+  return (r?.value as string) ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = sql();
+  await db`insert into settings (key, value) values (${key}, ${value})
+           on conflict (key) do update set value = excluded.value`;
+}
+
 // ---- Corridors --------------------------------------------------------------
 
 export async function listCorridors(): Promise<{ slug: string; label: string }[]> {
