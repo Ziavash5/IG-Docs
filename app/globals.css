@@ -377,6 +377,12 @@ p { margin: 14px 0; }
 .action-msg.ok { color: #1f7a47; }
 .action-msg.err { color: #b0473f; }
 
+.corpus-graph-wrap { margin: 18px 0 8px; border: 1px solid var(--color-line); border-radius: 12px; padding: 12px; background: var(--color-bg-soft); }
+.corpus-graph { width: 100%; height: auto; display: block; }
+.graph-node { cursor: pointer; }
+.graph-node circle { transition: stroke 0.15s; }
+.graph-node:hover circle { stroke: var(--color-brand); stroke-width: 2; }
+
 .corpus-map { margin: 18px 0 8px; }
 .map-group { margin-bottom: 16px; }
 .map-group-label { font-family: var(--font-head); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-faint); margin: 0 0 8px; }

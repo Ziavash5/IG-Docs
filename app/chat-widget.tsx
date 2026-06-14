@@ -82,7 +82,7 @@ export default function ChatWidget() {
         const { done, value } = await reader.read();
         if (done) break;
         acc += decoder.decode(value, { stream: true });
-        const visible = acc.replace(/\[\[CALL\]\]/g, "").trimEnd();
+        const visible = acc.replace(/\[\[CALL\]\]/g, "").replace(/\s*—\s*/g, ", ").trimEnd();
         setMsgs((cur) => {
           const copy = [...cur];
           copy[copy.length - 1] = { role: "assistant", content: visible };
@@ -92,7 +92,7 @@ export default function ChatWidget() {
       const suggestCall = acc.includes("[[CALL]]");
       setMsgs((cur) => {
         const copy = [...cur];
-        copy[copy.length - 1] = { role: "assistant", content: acc.replace(/\[\[CALL\]\]/g, "").trim(), sources, suggestCall };
+        copy[copy.length - 1] = { role: "assistant", content: acc.replace(/\[\[CALL\]\]/g, "").replace(/\s*—\s*/g, ", ").trim(), sources, suggestCall };
         return copy;
       });
     } catch {

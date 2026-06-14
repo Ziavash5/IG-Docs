@@ -37,6 +37,40 @@ interface RawDraft {
   claims: { text: string; sourceId: string; locator: string }[];
 }
 
+// Structured-output schema so the API returns valid JSON every time (no parse failures).
+const WRITER_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["directAnswer", "keyTakeaways", "sections", "corridorDelta", "checklist", "claims"],
+  properties: {
+    directAnswer: { type: "string" },
+    keyTakeaways: { type: "array", items: { type: "string" } },
+    sections: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["heading", "body"],
+        properties: { heading: { type: "string" }, body: { type: "string" } },
+      },
+    },
+    corridorDelta: { type: "string" },
+    checklist: { type: "array", items: { type: "string" } },
+    claims: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "sourceId", "locator"],
+        properties: { text: { type: "string" }, sourceId: { type: "string" }, locator: { type: "string" } },
+      },
+    },
+  },
+};
+
+/** Strip em-dashes (kept out of all generated copy); leave en-dashes for pairs/ranges. */
+const noEmDash = (s: string) => (s ?? "").replace(/\s*—\s*/g, ", ");
+
 export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
   const validSourceIds = new Set(req.spans.map((s) => s.chunk.sourceId));
   const spanList = req.spans
@@ -47,6 +81,8 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
     model: MODEL,
     max_tokens: 8000,
     thinking: { type: "adaptive" },
+    // Guarantee valid JSON output.
+    ...({ output_config: { format: { type: "json_schema", name: "unit", schema: WRITER_SCHEMA } } } as Record<string, unknown>),
     system:
       "You write for InterGest Canada, the definitive reference for German companies " +
       "setting up and operating in Canada. Write like the sharpest cross-border advisory " +
@@ -98,14 +134,14 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
   // Enforce grounding: drop any claim not bound to a provided span.
   const claims: Claim[] = (raw.claims ?? [])
     .filter((c) => c.sourceId && c.locator && validSourceIds.has(c.sourceId))
-    .map((c) => ({ text: c.text, sourceId: c.sourceId, locator: c.locator, verified: false }));
+    .map((c) => ({ text: noEmDash(c.text), sourceId: c.sourceId, locator: c.locator, verified: false }));
 
   return {
-    directAnswer: raw.directAnswer ?? "",
-    keyTakeaways: raw.keyTakeaways ?? [],
-    sections: raw.sections ?? [],
-    corridorDelta: raw.corridorDelta,
-    checklist: raw.checklist ?? [],
+    directAnswer: noEmDash(raw.directAnswer ?? ""),
+    keyTakeaways: (raw.keyTakeaways ?? []).map(noEmDash),
+    sections: (raw.sections ?? []).map((s) => ({ heading: noEmDash(s.heading), body: noEmDash(s.body) })),
+    corridorDelta: raw.corridorDelta ? noEmDash(raw.corridorDelta) : undefined,
+    checklist: (raw.checklist ?? []).map(noEmDash),
     claims,
   };
 }
