@@ -82,7 +82,7 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
     max_tokens: 8000,
     thinking: { type: "adaptive" },
     // Guarantee valid JSON output.
-    ...({ output_config: { format: { type: "json_schema", name: "unit", schema: WRITER_SCHEMA } } } as Record<string, unknown>),
+    ...({ output_config: { format: { type: "json_schema", schema: WRITER_SCHEMA } } } as Record<string, unknown>),
     system:
       "You write for InterGest Canada, the definitive reference for German companies " +
       "setting up and operating in Canada. Write like the sharpest cross-border advisory " +
