@@ -16,6 +16,7 @@ export function DiscoverPanel() {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState("");
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   if (!open) {
     return (
@@ -47,7 +48,7 @@ export function DiscoverPanel() {
               </span>
               <button className="ghost-btn" disabled={pending || added.has(i)} onClick={() => start(async () => {
                 const r = await addSource({ body: s.body, url: s.url, corridor, crawl: true });
-                if (r.ok) setAdded((p) => new Set(p).add(i));
+                if (r.ok) { setAdded((p) => new Set(p).add(i)); router.refresh(); }
                 setMsg(r.message);
               })}>{added.has(i) ? "Added" : "Add"}</button>
             </li>
@@ -103,6 +104,7 @@ export function PdfUploadForm() {
   const [msg, setMsg] = useState("");
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
 
   if (!open) {
     return (
@@ -117,7 +119,7 @@ export function PdfUploadForm() {
         setMsg("Reading the PDF…");
         const r = await addPdfSource(fd);
         setMsg(r.message);
-        if (r.ok) { formRef.current?.reset(); setOpen(false); }
+        if (r.ok) { formRef.current?.reset(); setOpen(false); router.refresh(); }
       })}>
       <input className="assist-input" name="name" placeholder="Document name (e.g. Canada–Germany tax treaty)" />
       <input type="file" name="file" accept="application/pdf" />
@@ -218,11 +220,12 @@ export function IngestAllButton() {
 export function AddSourceForm() {
   const [body, setBody] = useState("");
   const [url, setUrl] = useState("");
-  const [corridor, setCorridor] = useState("base");
+  const [corridor, setCorridor] = useState("germany");
   const [crawl, setCrawl] = useState(true);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState("");
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   if (!open) {
     return (
@@ -248,7 +251,7 @@ export function AddSourceForm() {
             setMsg("Adding…");
             const r = await addSource({ body, url, corridor, crawl });
             setMsg(r.message);
-            if (r.ok) { setBody(""); setUrl(""); setOpen(false); }
+            if (r.ok) { setBody(""); setUrl(""); setOpen(false); router.refresh(); }
           })
         }>Add</button>
         <button className="ghost-btn" onClick={() => setOpen(false)}>Cancel</button>

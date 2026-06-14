@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "./nav";
+import ChatWidget from "./chat-widget";
 import { getCurriculum } from "@/lib/curriculum";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="col">{children}</div>
           </main>
         </div>
+        <ChatWidget />
       </body>
     </html>
   );

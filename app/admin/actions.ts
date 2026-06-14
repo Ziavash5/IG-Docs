@@ -33,11 +33,8 @@ import {
   addPending,
   insertCustomSource,
   deleteCustomSource,
-  getSourceHash,
-  setSourceHash,
-  flagUnitsForSource,
 } from "@/lib/db";
-import { createHash } from "node:crypto";
+import { runFreshnessCheck } from "@/lib/freshness";
 import { anthropic, MODEL, textOf, parseJson } from "@/lib/anthropic";
 import {
   seedDefaults,
@@ -491,21 +488,10 @@ export async function checkSourceFreshness(
 ): Promise<{ ok: boolean; changed: boolean; flagged: number; message: string }> {
   const source = (await allSources()).find((s) => s.id === sourceId);
   if (!source) return { ok: false, changed: false, flagged: 0, message: "Unknown source." };
-  if (sourceId.startsWith("custom-pdf-")) {
-    return { ok: true, changed: false, flagged: 0, message: `${sourceId}: uploaded file (skipped).` };
-  }
   try {
-    const page = await fetchPage(source.url);
-    if (!page) return { ok: true, changed: false, flagged: 0, message: `${sourceId}: unreachable.` };
-    const hash = createHash("sha256").update(page.text).digest("hex");
-    const prev = await getSourceHash(sourceId);
-    await setSourceHash(sourceId, hash);
-    if (prev && prev !== hash) {
-      const flagged = await flagUnitsForSource(sourceId);
-      revalidatePath("/admin");
-      return { ok: true, changed: true, flagged, message: `${sourceId}: CHANGED — ${flagged} unit(s) flagged for review.` };
-    }
-    return { ok: true, changed: false, flagged: 0, message: `${sourceId}: ${prev ? "unchanged" : "baseline saved"}.` };
+    const r = await runFreshnessCheck(source);
+    if (r.changed) revalidatePath("/admin");
+    return { ok: true, ...r };
   } catch (e) {
     return { ok: false, changed: false, flagged: 0, message: `${sourceId}: ${errMsg(e)}` };
   }

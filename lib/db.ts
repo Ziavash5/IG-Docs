@@ -229,25 +229,22 @@ export interface StoredUnitInput {
 
 export async function storeUnit(u: StoredUnitInput): Promise<void> {
   const db = sql();
+  // Replace any existing unit for this slug (cascades old claims + queue), then insert
+  // fresh. Keying on slug avoids id collisions when the id scheme changes.
+  await db`delete from units where slug = ${u.slug}`;
   await db`
     insert into units (id, slug, question, pillar, layer, corridor, jurisdictions,
                        risk_tier, status, last_reviewed, cta, body, updated_at)
     values (${u.id}, ${u.slug}, ${u.question}, ${u.pillar}, ${u.layer}, ${u.corridor},
             ${db.array(u.jurisdictions)}, ${u.riskTier}, ${u.status}, ${u.lastReviewed},
             ${u.cta ?? null}, ${u.body ?? null}, now())
-    on conflict (id) do update set
-      question = excluded.question, status = excluded.status,
-      body = excluded.body, last_reviewed = excluded.last_reviewed, updated_at = now()
   `;
-  await db`delete from claims where unit_id = ${u.id}`;
   for (const c of u.claims) {
     await db`
       insert into claims (unit_id, text, source_id, locator, verified)
       values (${u.id}, ${c.text}, ${c.sourceId}, ${c.locator}, ${c.verified})
     `;
   }
-  // Regenerating replaces any prior open review entry, instead of stacking duplicates.
-  await db`update review_queue set resolved_at = now() where unit_id = ${u.id} and resolved_at is null`;
   if (u.queueReason) {
     await db`insert into review_queue (unit_id, reason) values (${u.id}, ${u.queueReason})`;
   }
