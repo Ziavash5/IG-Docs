@@ -190,7 +190,7 @@ function UnitView({
           {content!.author ? ` by ${content!.author}${content!.credentials ? `, ${content!.credentials}` : ""}` : ""}.
         </p>
       )}
-      {hasGenerated && <LiveData />}
+      {hasGenerated && <LiveData corridor={corridor} />}
 
       {hasGenerated ? (
         <>
