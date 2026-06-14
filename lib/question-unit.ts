@@ -6,7 +6,7 @@
 
 export type Corridor =
   | "base"
-  | "dach"
+  | "germany"
   | "uk"
   | "usa"
   | "australia"

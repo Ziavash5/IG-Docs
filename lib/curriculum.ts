@@ -124,7 +124,7 @@ export async function assessCurriculum(
     max_tokens: 1500,
     thinking: { type: "adaptive" },
     system:
-      "You are an editor auditing a corridor-specific knowledge hub for foreign (DACH) " +
+      "You are an editor auditing a corridor-specific knowledge hub for German " +
       "companies entering Canada. Assess this pillar's question set for: coverage gaps " +
       "(high-value questions a buyer would ask but are missing), duplicates or overlap, " +
       "vague or low-value questions, and whether the ordering is logical. Be specific and " +
@@ -133,7 +133,7 @@ export async function assessCurriculum(
       {
         role: "user",
         content:
-          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: DACH\n\n` +
+          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: Germany\n\n` +
           `Current questions:\n${questions.map((q) => `- ${q}`).join("\n")}`,
       },
     ],
@@ -182,7 +182,7 @@ export interface SuggestedTopic {
   riskTier: RiskTier;
 }
 
-/** Ask Claude to propose new question-topics for a pillar in the DACH corridor. */
+/** Ask Claude to propose new question-topics for a pillar in the Germany corridor. */
 export async function suggestTopics(
   pillarTitle: string,
   service: string,
@@ -193,8 +193,8 @@ export async function suggestTopics(
     max_tokens: 1500,
     thinking: { type: "adaptive" },
     system:
-      "You propose new long-tail questions a German, Austrian, or Swiss company would " +
-      "ask about this part of setting up or operating in Canada. Each must be specific, " +
+      "You propose new long-tail questions a German company would ask about this part " +
+      "of setting up or operating in Canada. Each must be specific, " +
       "answerable from official sources, and not a duplicate of the existing ones. Mark " +
       "riskTier 'interpretive' for treaty/PE/transfer-pricing/immigration-eligibility " +
       "matters, otherwise 'factual'. Respond with a single JSON object.",
@@ -202,7 +202,7 @@ export async function suggestTopics(
       {
         role: "user",
         content:
-          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: DACH\n\n` +
+          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: Germany\n\n` +
           `Existing questions:\n${existingQuestions.map((q) => `- ${q}`).join("\n")}\n\n` +
           `Propose 4 new ones. Return JSON: {"topics": [{"title": "short label", ` +
           `"question": "the full question", "riskTier": "factual|interpretive"}]}`,

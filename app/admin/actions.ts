@@ -45,7 +45,7 @@ import {
 } from "@/lib/curriculum";
 import type { Corridor, RiskTier } from "@/lib/question-unit";
 
-const CORRIDOR: Corridor = "dach";
+const CORRIDOR: Corridor = "germany";
 
 export type ActionResult = { ok: boolean; message: string };
 
@@ -417,6 +417,37 @@ export async function addSource(input: {
   }
 }
 
+/** Upload a PDF, extract its text, and store it as a source with its passages. */
+export async function addPdfSource(formData: FormData): Promise<ActionResult> {
+  const file = formData.get("file");
+  const name = String(formData.get("name") ?? "").trim();
+  const corridor = String(formData.get("corridor") ?? "base");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: "Choose a PDF." };
+  if (!name) return { ok: false, message: "Give the document a name." };
+
+  try {
+    const { getDocumentProxy, extractText } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(await file.arrayBuffer()));
+    const { text } = await extractText(pdf, { mergePages: true });
+    const clean = String(text).replace(/\s+/g, " ").trim();
+    if (clean.length < 100) return { ok: false, message: "No extractable text (scanned/image PDF?)." };
+
+    const id = `custom-pdf-${slugifyId(name)}-${Math.random().toString(36).slice(2, 5)}`;
+    const locator = `uploaded:${file.name}`;
+    await insertCustomSource({ id, body: `${name} (PDF)`, url: locator, corridor });
+    await upsertSource({ id, body: `${name} (PDF)`, url: locator, corridor: corridor as Corridor });
+    await clearSourceData(id);
+
+    const chunks = chunkPage(id, locator, clean);
+    const emb = await embedDocuments(chunks.map((c) => c.text));
+    await insertChunks(id, chunks.map((c, i) => ({ text: c.text, locator: c.locator, embedding: emb[i] })));
+    revalidatePath("/admin");
+    return { ok: true, message: `Added “${name}” with ${chunks.length} passages.` };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
 export async function removeSource(id: string): Promise<ActionResult> {
   try {
     await deleteCustomSource(id);
@@ -468,7 +499,7 @@ export async function generateUnit(topicSlug: string, guidance?: string): Promis
     const body = [
       draft.directAnswer,
       ...draft.sections.map((s) => `## ${s.heading}\n\n${s.body}`),
-      draft.corridorDelta ? `## How it differs for your corridor (DACH)\n\n${draft.corridorDelta}` : "",
+      draft.corridorDelta ? `## How it differs for a German company\n\n${draft.corridorDelta}` : "",
       draft.checklist.length ? `## Checklist\n\n${draft.checklist.map((c) => `- ${c}`).join("\n")}` : "",
     ]
       .filter(Boolean)

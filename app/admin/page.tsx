@@ -2,7 +2,7 @@ import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { allSources } from "@/lib/sources-registry";
 import { openQueue, ingestStats, sourceChunkCounts, type QueueRow } from "@/lib/db";
 import { approveUnit, seedCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, AutopilotButton } from "./buttons";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton } from "./buttons";
 import { PillarEditor } from "./curriculum";
 import { SourcePanel } from "./source-panel";
 
@@ -66,7 +66,7 @@ export default async function Admin() {
         <div style={{ margin: "10px 0 18px" }}>
           <ActionButton action={seedCurriculum} idleLabel="Seed starter curriculum" busyLabel="Seeding…" variant="primary" />
           <p style={{ color: "var(--color-faint)", fontSize: 13, marginTop: 6 }}>
-            Loads the default DACH topics so you have a starting point. You can change everything after.
+            Loads the default Germany-corridor topics so you have a starting point. You can change everything after.
           </p>
         </div>
       )}
@@ -105,6 +105,7 @@ export default async function Admin() {
         The writer can only cite what is in the corpus.
       </p>
       <AddSourceForm />
+      <PdfUploadForm />
       <SourcePanel
         sources={sources.map((s) => ({ id: s.id, body: s.body, custom: s.id.startsWith("custom-"), corridor: s.corridor }))}
       />

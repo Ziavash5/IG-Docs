@@ -87,6 +87,24 @@ function markdownLinks(md: string): string[] {
   return [...out];
 }
 
+/**
+ * Clean reader markdown into prose: drop the reader header and the trailing
+ * "Links/Buttons"/"Images" summary, collapse markdown links to their text, and remove
+ * image/link-list noise — so chunks are real content, not navigation.
+ */
+function cleanReaderText(md: string): string {
+  let t = md;
+  const contentIdx = t.indexOf("Markdown Content:");
+  if (contentIdx !== -1) t = t.slice(contentIdx + "Markdown Content:".length);
+  t = t.split(/\n(?:Links\/Buttons|Images):\s*\n/i)[0];
+  return t
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // images
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1") // links -> text
+    .replace(/^\s*[*-]\s+$/gm, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Fast path: a direct browser-like fetch. Returns null if blocked or thin. */
 async function fetchDirect(url: string): Promise<{ text: string; links: string[] } | null> {
   try {
@@ -124,14 +142,17 @@ async function fetchReader(
     if (!res.ok) return null;
     const md = await res.text();
     if (md.length < 200) return null;
-    return { text: md, links: markdownLinks(md) };
+    // Links come from the full markdown (incl. the summary); content is cleaned prose.
+    return { text: cleanReaderText(md), links: markdownLinks(md) };
   } catch {
     return null;
   }
 }
 
-/** Fetch one page robustly: direct first, then the rendering reader. */
+/** Fetch one page robustly: direct first, then the rendering reader. PDFs go via the
+ *  reader (it extracts PDF text; a direct fetch returns unreadable binary). */
 export async function fetchPage(url: string): Promise<{ text: string; links: string[] } | null> {
+  if (/\.pdf($|\?)/i.test(url)) return await fetchReader(url);
   return (await fetchDirect(url)) ?? (await fetchReader(url));
 }
 

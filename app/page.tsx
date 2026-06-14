@@ -19,8 +19,8 @@ export default function Home() {
       <p>
         A working reference for foreign companies setting up and running operations in
         Canada. Each answer is tied to an official government source and written for a
-        specific home country. We start with companies from Germany, Austria, and
-        Switzerland, and add more as we go.
+        specific home country. We start with companies from Germany, and add more
+        countries as we go.
       </p>
       <p>
         Setting up in Canada is not one answer. How your profits are taxed, which

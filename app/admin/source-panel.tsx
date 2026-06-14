@@ -18,7 +18,7 @@ export function SourcePanel({ sources }: { sources: S[] }) {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState("");
-  const [filter, setFilter] = useState<"all" | "base" | "dach">("all");
+  const [filter, setFilter] = useState<"all" | "base" | "germany">("all");
   const [status, setStatus] = useState<Record<string, SourceStatus>>({});
   const stop = useRef(false);
   const router = useRouter();
@@ -97,11 +97,11 @@ export function SourcePanel({ sources }: { sources: S[] }) {
 
       <div className="assist-bar" style={{ margin: "0 0 8px" }}>
         <span style={{ fontSize: 12, color: "var(--color-faint)" }}>Show:</span>
-        {(["all", "base", "dach"] as const).map((f) => (
+        {(["all", "base", "germany"] as const).map((f) => (
           <button key={f} type="button" className="ghost-btn"
             style={filter === f ? { borderColor: "var(--color-brand)", color: "var(--color-brand)" } : undefined}
             onClick={() => setFilter(f)}>
-            {f === "all" ? "All" : f === "base" ? "Canada (base)" : "DACH (corridor)"}
+            {f === "all" ? "All" : f === "base" ? "Canada (base)" : "Germany (corridor)"}
           </button>
         ))}
       </div>
@@ -133,12 +133,16 @@ export function SourcePanel({ sources }: { sources: S[] }) {
                     {p > 0 ? `${p} passages` : "not ingested"}{pend > 0 ? ` · ${pend} pending` : ""}
                   </span>
                 </span>
-                <button className="ghost-btn" disabled={running} onClick={drive(() => loop(() => ingestSourceStep(s.id)))}>
-                  {p > 0 ? "Continue" : "Ingest"}
-                </button>
-                <button className="ghost-btn" disabled={running} onClick={drive(async () => { await clearSource(s.id); await loop(() => ingestSourceStep(s.id)); })}>
-                  Restart
-                </button>
+                {!s.id.startsWith("custom-pdf-") && (
+                  <>
+                    <button className="ghost-btn" disabled={running} onClick={drive(() => loop(() => ingestSourceStep(s.id)))}>
+                      {p > 0 ? "Continue" : "Ingest"}
+                    </button>
+                    <button className="ghost-btn" disabled={running} onClick={drive(async () => { await clearSource(s.id); await loop(() => ingestSourceStep(s.id)); })}>
+                      Restart
+                    </button>
+                  </>
+                )}
                 {s.custom && (
                   <button className="ghost-btn" disabled={running} onClick={drive(async () => { await removeSource(s.id); await refresh(); })}>
                     Delete

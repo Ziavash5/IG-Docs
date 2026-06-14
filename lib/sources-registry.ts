@@ -3,7 +3,7 @@ import { listCustomSources } from "./db";
 
 /**
  * Seed of the official source registry (docs/sources.md) with canonical URLs for
- * ingestion. Official primary sources only. DACH-corridor first; expand as corridors
+ * ingestion. Official primary sources only. Germany corridor first; expand as corridors
  * are added. `corridor: "base"` sources are candidates for every corridor.
  */
 const CRA = "https://www.canada.ca/en/revenue-agency/services/tax";
@@ -35,28 +35,28 @@ export const SOURCE_REGISTRY: Source[] = [
     url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada/permit.html",
     crawl: { prefix: "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada", max: 25 } },
 
-  // DACH overlay — source-country (the moat)
-  { id: "fin-ca-de-treaty", body: "Department of Finance Canada — Tax treaties", corridor: "dach",
+  // Germany overlay — source-country (the moat). Add Austria/Switzerland as their own corridors.
+  { id: "fin-ca-de-treaty", body: "Department of Finance Canada — Tax treaties", corridor: "germany",
     url: "https://www.canada.ca/en/department-finance/programs/tax-policy/tax-treaties.html",
     crawl: { prefix: "https://www.canada.ca/en/department-finance/programs/tax-policy/tax-treaties", max: 15 } },
-  { id: "servicecanada-ssa-de", body: "Service Canada — Canada–Germany social security agreement", corridor: "dach",
+  { id: "servicecanada-ssa-de", body: "Service Canada — Canada–Germany social security agreement", corridor: "germany",
     url: "https://www.canada.ca/en/employment-social-development/programs/international-benefits/countries/germany.html",
     crawl: { prefix: "https://www.canada.ca/en/employment-social-development/programs/international-benefits", max: 12 } },
-  { id: "de-bzst", body: "Bundeszentralamt für Steuern (DE) — Foreign tax", corridor: "dach",
+  { id: "de-bzst", body: "Bundeszentralamt für Steuern (DE) — Foreign tax", corridor: "germany",
     url: "https://www.bzst.de/EN/Businesses/businesses_node.html",
     crawl: { prefix: "https://www.bzst.de/EN", max: 15 } },
-  { id: "de-handelsregister", body: "Handelsregister (DE) — Company register", corridor: "dach",
+  { id: "de-handelsregister", body: "Handelsregister (DE) — Company register", corridor: "germany",
     url: "https://www.handelsregister.de/rp_web/welcome.xhtml" },
-  { id: "de-astg", body: "Außensteuergesetz (DE) — German CFC rules (full text)", corridor: "dach",
+  { id: "de-astg", body: "Außensteuergesetz (DE) — German CFC rules (full text)", corridor: "germany",
     url: "https://www.gesetze-im-internet.de/astg/",
     crawl: { prefix: "https://www.gesetze-im-internet.de/astg/", max: 25 } },
-  { id: "de-estg-kstg", body: "Körperschaftsteuergesetz (DE) — German corporate tax (full text)", corridor: "dach",
+  { id: "de-estg-kstg", body: "Körperschaftsteuergesetz (DE) — German corporate tax (full text)", corridor: "germany",
     url: "https://www.gesetze-im-internet.de/kstg_1977/",
     crawl: { prefix: "https://www.gesetze-im-internet.de/kstg_1977/", max: 25 } },
-  { id: "de-estg", body: "Einkommensteuergesetz (DE) — German income tax (full text)", corridor: "dach",
+  { id: "de-estg", body: "Einkommensteuergesetz (DE) — German income tax (full text)", corridor: "germany",
     url: "https://www.gesetze-im-internet.de/estg/",
     crawl: { prefix: "https://www.gesetze-im-internet.de/estg/", max: 30 } },
-  { id: "de-ustg", body: "Umsatzsteuergesetz (DE) — German VAT (full text)", corridor: "dach",
+  { id: "de-ustg", body: "Umsatzsteuergesetz (DE) — German VAT (full text)", corridor: "germany",
     url: "https://www.gesetze-im-internet.de/ustg_1980/",
     crawl: { prefix: "https://www.gesetze-im-internet.de/ustg_1980/", max: 25 } },
 ];

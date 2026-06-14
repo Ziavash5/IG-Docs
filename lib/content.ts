@@ -63,7 +63,9 @@ export interface CorridorOption {
 }
 
 export const corridors: CorridorOption[] = [
-  { slug: "dach", label: "DACH", active: true },
+  { slug: "germany", label: "Germany", active: true },
+  { slug: "austria", label: "Austria", active: false },
+  { slug: "switzerland", label: "Switzerland", active: false },
   { slug: "uk", label: "UK", active: false },
   { slug: "usa", label: "USA", active: false },
   { slug: "australia", label: "Australia", active: false },
@@ -138,7 +140,7 @@ export const journey: Stage[] = [
           planned(
             "canada-vs-usa-north-american-base-dach",
             "Canada vs USA base",
-            "Should a DACH company base its North American operations in Canada or the USA?",
+            "Should a German company base its North American operations in Canada or the USA?",
             "interpretive",
           ),
         ],
@@ -290,7 +292,7 @@ export const journey: Stage[] = [
           planned(
             "fractional-cfo-dach-subsidiary-canada",
             "Fractional CFO",
-            "When does a DACH-owned Canadian subsidiary need a fractional CFO?",
+            "When does a German-owned Canadian subsidiary need a fractional CFO?",
             "interpretive",
           ),
           planned(

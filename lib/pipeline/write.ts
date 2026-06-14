@@ -47,7 +47,7 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
     thinking: { type: "adaptive" },
     system:
       "You are a senior cross-border advisor writing the authoritative reference for " +
-      "foreign companies setting up and operating in Canada, for a DACH audience. You write " +
+      "foreign companies setting up and operating in Canada, for a German audience. You write " +
       "the specific, hard-to-find answer a generic blog cannot. The value is precision.\n\n" +
       "RULES:\n" +
       "1. Use ONLY the provided official source spans for every factual statement, and cite " +
@@ -67,7 +67,7 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
       "the determination depends on the company's particular facts. Do NOT assert the " +
       "reader's specific conclusion. Do NOT add booking or sales language — the page handles " +
       "that.\n" +
-      "6. corridorDelta: the concrete difference for a DACH-based parent (treaty article, " +
+      "6. corridorDelta: the concrete difference for a German parent (treaty article, " +
       "CFC / Außensteuergesetz, totalization, EU/CETA), grounded in sources where possible.\n" +
       "7. checklist: concrete next actions (forms, registrations, decisions), only if " +
       "supported by the sources.\n" +

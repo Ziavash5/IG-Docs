@@ -184,7 +184,7 @@ function UnitView({
           ))}
           {exemplar.corridorDelta && (
             <div className="corridor-callout">
-              <strong>How it differs for your corridor (DACH)</strong>
+              <strong>How it differs for a German company</strong>
               <p style={{ margin: "8px 0 0" }}>{exemplar.corridorDelta}</p>
             </div>
           )}

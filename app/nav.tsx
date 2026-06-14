@@ -34,7 +34,7 @@ export default function Nav({ journey }: { journey: Stage[] }) {
       <div className="corridor-field">
         <label htmlFor="corridor">Where your company is based</label>
         <div className="corridor-select-wrap">
-          <select id="corridor" defaultValue="dach" className="corridor-select">
+          <select id="corridor" defaultValue="germany" className="corridor-select">
             {corridors.map((c) => (
               <option key={c.slug} value={c.slug} disabled={!c.active}>
                 {c.label}
