@@ -40,7 +40,7 @@ import {
 import { runFreshnessCheck } from "@/lib/freshness";
 import { getActiveCorridor } from "@/lib/corridor";
 import { cookies } from "next/headers";
-import { anthropic, MODEL, textOf, parseJson } from "@/lib/anthropic";
+import { anthropic, MODEL, textOf, jsonCall } from "@/lib/anthropic";
 import {
   seedDefaults,
   suggestTopics,
@@ -459,26 +459,28 @@ export async function discoverSources(
 ): Promise<{ ok: boolean; message?: string; sources: { body: string; url: string }[] }> {
   try {
     const existing = (await allSources()).map((s) => `${s.body} ${s.url}`);
-    const msg = await anthropic().messages.create({
-      model: MODEL,
-      max_tokens: 1500,
-      thinking: { type: "adaptive" },
+    const parsed = await jsonCall<{ sources: { body: string; url: string }[] }>({
+      schema: {
+        type: "object", additionalProperties: false, required: ["sources"],
+        properties: {
+          sources: {
+            type: "array",
+            items: {
+              type: "object", additionalProperties: false, required: ["body", "url"],
+              properties: { body: { type: "string" }, url: { type: "string" } },
+            },
+          },
+        },
+      },
       system:
         "You propose OFFICIAL government bodies and primary-law sources (with real canonical " +
         "URLs) relevant to a company from the given country setting up or operating in Canada. " +
-        "Only official/government/primary-law sites — no blogs, firms, or commentary. Prefer " +
-        "pages that carry substantive rules. Do not repeat sources already listed. Respond with " +
-        "a single JSON object.",
-      messages: [
-        {
-          role: "user",
-          content:
-            `Country/corridor: ${corridor}\n\nAlready in the registry:\n${existing.join("\n")}\n\n` +
-            `Return JSON: {"sources": [{"body": "name", "url": "https://…"}]} with up to 8 new official sources.`,
-        },
-      ],
+        "Only official/government/primary-law sites, no blogs, firms, or commentary. Prefer " +
+        "pages that carry substantive rules. Do not repeat sources already listed.",
+      user:
+        `Country/corridor: ${corridor}\n\nAlready in the registry:\n${existing.join("\n")}\n\n` +
+        `Propose up to 8 new official sources.`,
     });
-    const parsed = parseJson<{ sources: { body: string; url: string }[] }>(textOf(msg));
     const sources = (parsed.sources ?? []).filter((s) => s.body && /^https?:\/\//.test(s.url));
     return { ok: true, sources };
   } catch (e) {

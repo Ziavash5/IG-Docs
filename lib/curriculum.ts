@@ -15,7 +15,7 @@ import {
   type PublicUnit,
 } from "./db";
 import { getUnitContent } from "./db";
-import { anthropic, MODEL, textOf, parseJson } from "./anthropic";
+import { anthropic, MODEL, textOf, jsonCall } from "./anthropic";
 
 /**
  * The curriculum is editable and DB-backed. This module assembles the navigable tree
@@ -86,25 +86,18 @@ export async function autoOrderSlugs(
 ): Promise<string[]> {
   if (topics.length < 2) return topics.map((t) => t.slug);
   try {
-    const msg = await anthropic().messages.create({
-      model: MODEL,
-      max_tokens: 1000,
-      thinking: { type: "adaptive" },
+    const parsed = await jsonCall<{ order: string[] }>({
+      maxTokens: 1000,
+      schema: {
+        type: "object", additionalProperties: false, required: ["order"],
+        properties: { order: { type: "array", items: { type: "string" } } },
+      },
       system:
         "You order questions into the sequence a foreign company would naturally work " +
-        "through them: foundational decisions first, then dependent steps. Respond with a " +
-        "single JSON object listing every provided slug exactly once.",
-      messages: [
-        {
-          role: "user",
-          content:
-            `Pillar: ${pillarTitle}\n\n` +
-            topics.map((t) => `- ${t.slug}: ${t.question}`).join("\n") +
-            `\n\nReturn JSON: {"order": ["slug", ...]} covering every slug once.`,
-        },
-      ],
+        "through them: foundational decisions first, then dependent steps. List every " +
+        "provided slug exactly once.",
+      user: `Pillar: ${pillarTitle}\n\n${topics.map((t) => `- ${t.slug}: ${t.question}`).join("\n")}`,
     });
-    const parsed = parseJson<{ order: string[] }>(textOf(msg));
     const valid = parsed.order.filter((s) => topics.some((t) => t.slug === s));
     const missing = topics.map((t) => t.slug).filter((s) => !valid.includes(s));
     return [...valid, ...missing];
@@ -152,27 +145,21 @@ export async function assessUnitValue(
   body: string,
   citations: string[],
 ): Promise<ValueReport> {
-  const msg = await anthropic().messages.create({
-    model: MODEL,
-    max_tokens: 1200,
-    thinking: { type: "adaptive" },
+  const parsed = await jsonCall<{ score: number; findings: string }>({
+    maxTokens: 1200,
+    schema: {
+      type: "object", additionalProperties: false, required: ["score", "findings"],
+      properties: { score: { type: "integer" }, findings: { type: "string" } },
+    },
     system:
       "You assess whether a knowledge-hub answer is genuinely valuable to a foreign company " +
-      "entering Canada. Score 1–5 on: specificity (real thresholds, sections, forms, numbers " +
+      "entering Canada. Score 1-5 on: specificity (real thresholds, sections, forms, numbers " +
       "vs vague generalities), grounding (claims tied to the cited official sources), and " +
       "usefulness (hard-to-find, decision-useful content vs generic blog filler). Penalise " +
-      "hedging, padding, and anything unsupported. Be blunt and concrete. Respond with a " +
-      "single JSON object: {\"score\": <1-5>, \"findings\": \"- point\\n- point\"}.",
-    messages: [
-      {
-        role: "user",
-        content:
-          `Question: ${question}\nCited sources: ${citations.join(", ") || "(none)"}\n\n` +
-          `Answer:\n${body || "(empty)"}`,
-      },
-    ],
+      "hedging, padding, and anything unsupported. Be blunt and concrete. findings is a " +
+      "dash-bulleted string.",
+    user: `Question: ${question}\nCited sources: ${citations.join(", ") || "(none)"}\n\nAnswer:\n${body || "(empty)"}`,
   });
-  const parsed = parseJson<{ score: number; findings: string }>(textOf(msg));
   return { score: Number(parsed.score) || 0, text: parsed.findings ?? "" };
 }
 
@@ -188,27 +175,30 @@ export async function suggestTopics(
   service: string,
   existingQuestions: string[],
 ): Promise<SuggestedTopic[]> {
-  const msg = await anthropic().messages.create({
-    model: MODEL,
-    max_tokens: 1500,
-    thinking: { type: "adaptive" },
-    system:
-      "You propose new long-tail questions a German company would ask about this part " +
-      "of setting up or operating in Canada. Each must be specific, " +
-      "answerable from official sources, and not a duplicate of the existing ones. Mark " +
-      "riskTier 'interpretive' for treaty/PE/transfer-pricing/immigration-eligibility " +
-      "matters, otherwise 'factual'. Respond with a single JSON object.",
-    messages: [
-      {
-        role: "user",
-        content:
-          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: Germany\n\n` +
-          `Existing questions:\n${existingQuestions.map((q) => `- ${q}`).join("\n")}\n\n` +
-          `Propose 4 new ones. Return JSON: {"topics": [{"title": "short label", ` +
-          `"question": "the full question", "riskTier": "factual|interpretive"}]}`,
+  const parsed = await jsonCall<{ topics: SuggestedTopic[] }>({
+    schema: {
+      type: "object", additionalProperties: false, required: ["topics"],
+      properties: {
+        topics: {
+          type: "array",
+          items: {
+            type: "object", additionalProperties: false, required: ["title", "question", "riskTier"],
+            properties: {
+              title: { type: "string" }, question: { type: "string" },
+              riskTier: { type: "string", enum: ["factual", "interpretive"] },
+            },
+          },
+        },
       },
-    ],
+    },
+    system:
+      "You propose new long-tail questions a German company would ask about this part of " +
+      "setting up or operating in Canada. Each must be specific, answerable from official " +
+      "sources, and not a duplicate of the existing ones. Mark riskTier 'interpretive' for " +
+      "treaty/PE/transfer-pricing/immigration-eligibility matters, otherwise 'factual'.",
+    user:
+      `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: Germany\n\n` +
+      `Existing questions:\n${existingQuestions.map((q) => `- ${q}`).join("\n")}\n\nPropose 4 new ones.`,
   });
-  const parsed = parseJson<{ topics: SuggestedTopic[] }>(textOf(msg));
   return (parsed.topics ?? []).filter((t) => t.question && t.title);
 }

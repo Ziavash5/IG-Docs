@@ -1,6 +1,6 @@
 import type { Claim } from "../question-unit";
 import type { ClaimVerification } from "./types";
-import { anthropic, MODEL, textOf, parseJson } from "../anthropic";
+import { jsonCall } from "../anthropic";
 import { embedQuery } from "../voyage";
 import { searchChunks } from "../db";
 
@@ -42,27 +42,31 @@ export async function verifyClaims(
     );
   }
 
-  const msg = await anthropic().messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    thinking: { type: "adaptive" },
+  const raw = await jsonCall<RawVerification>({
+    maxTokens: 4000,
+    schema: {
+      type: "object", additionalProperties: false, required: ["results"],
+      properties: {
+        results: {
+          type: "array",
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["index", "citationSupports", "secondPassAgrees", "notes"],
+            properties: {
+              index: { type: "integer" }, citationSupports: { type: "boolean" },
+              secondPassAgrees: { type: "boolean" }, notes: { type: "string" },
+            },
+          },
+        },
+      },
+    },
     system:
       "You are a fact-checker verifying claims against official sources. For each claim " +
-      "decide: citationSupports = do the retrieved spans from the cited source support " +
-      "the claim? secondPassAgrees = does the independent evidence agree? Be strict — if " +
-      "the evidence is absent or only partial, answer false. Respond with a single JSON object.",
-    messages: [
-      {
-        role: "user",
-        content:
-          passages.join("\n\n") +
-          `\n\nReturn JSON: {"results": [{"index": 0, "citationSupports": true, ` +
-          `"secondPassAgrees": true, "notes": "..."}]} with one entry per claim.`,
-      },
-    ],
+      "decide: citationSupports = do the retrieved spans from the cited source support the " +
+      "claim? secondPassAgrees = does the independent evidence agree? Be strict: if the " +
+      "evidence is absent or only partial, answer false. One result per claim.",
+    user: passages.join("\n\n"),
   });
-
-  const raw = parseJson<RawVerification>(textOf(msg));
   const byIndex = new Map(raw.results.map((r) => [r.index, r]));
 
   const verifications: ClaimVerification[] = claims.map((c, i) => {
