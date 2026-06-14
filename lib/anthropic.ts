@@ -35,8 +35,9 @@ export function parseJson<T>(raw: string): T {
 }
 
 /**
- * A single-shot call that returns JSON guaranteed-valid by the API's structured output.
- * Used by all the extraction/scoring helpers so they never fail on malformed JSON.
+ * A single-shot call that returns a structured object, guaranteed-valid via forced
+ * tool-use (the API validates the tool input against the schema and returns it as an
+ * object, so there is no JSON text to parse and nothing can come back malformed).
  */
 export async function jsonCall<T>(args: {
   system: string;
@@ -47,9 +48,12 @@ export async function jsonCall<T>(args: {
   const msg = await anthropic().messages.create({
     model: MODEL,
     max_tokens: args.maxTokens ?? 1500,
-    ...({ output_config: { format: { type: "json_schema", schema: args.schema } } } as Record<string, unknown>),
     system: args.system,
+    tools: [{ name: "emit", description: "Return the structured result.", input_schema: args.schema as Anthropic.Tool.InputSchema }],
+    tool_choice: { type: "tool", name: "emit" },
     messages: [{ role: "user", content: args.user }],
   });
-  return parseJson<T>(textOf(msg));
+  const block = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+  if (!block) throw new Error("No structured output returned");
+  return block.input as T;
 }

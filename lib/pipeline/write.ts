@@ -1,6 +1,6 @@
 import type { Corridor, Pillar, Claim } from "../question-unit";
 import type { RetrievedSpan } from "./types";
-import { anthropic, MODEL, textOf, parseJson } from "../anthropic";
+import { jsonCall } from "../anthropic";
 
 /**
  * Writer — drafts a unit from retrieved spans. Hard constraint: every claim must bind
@@ -77,12 +77,9 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
     .map((s, i) => `[span ${i}] sourceId=${s.chunk.sourceId} locator=${s.chunk.locator}\n${s.chunk.text}`)
     .join("\n\n");
 
-  const msg = await anthropic().messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    thinking: { type: "adaptive" },
-    // Guarantee valid JSON output.
-    ...({ output_config: { format: { type: "json_schema", schema: WRITER_SCHEMA } } } as Record<string, unknown>),
+  const raw = await jsonCall<RawDraft>({
+    maxTokens: 8000,
+    schema: WRITER_SCHEMA,
     system:
       "You write for InterGest Canada, the definitive reference for German companies " +
       "setting up and operating in Canada. Write like the sharpest cross-border advisory " +
@@ -113,23 +110,13 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
       "eligibility): give the rule and the deciding factors, state plainly the outcome depends " +
       "on the company's facts; do NOT assert their conclusion or add sales language.\n" +
       "Voice: clear, confident, human, specific. NEVER use em-dashes; use commas or periods. " +
-      "Cover the decision end to end without padding. Respond with a single JSON object only.",
-    messages: [
-      {
-        role: "user",
-        content:
-          `Question: ${req.question}\nCorridor: ${req.corridor}\nPillar: ${req.pillar}\n` +
-          `Risk tier: ${req.riskTier}\n\nRetrieved official source spans:\n${spanList}\n\n` +
-          (req.guidance ? `Operator guidance (prioritise this, but stay grounded in the sources): ${req.guidance}\n\n` : "") +
-          `Return JSON with this shape:\n` +
-          `{"directAnswer": "...", "keyTakeaways": ["..."], "sections": [{"heading": "...", "body": "..."}], ` +
-          `"corridorDelta": "...", "checklist": ["..."], ` +
-          `"claims": [{"text": "...", "sourceId": "<one of the span sourceIds>", "locator": "<that span's locator>"}]}`,
-      },
-    ],
+      "Cover the decision end to end without padding.",
+    user:
+      `Question: ${req.question}\nCorridor: ${req.corridor}\nPillar: ${req.pillar}\n` +
+      `Risk tier: ${req.riskTier}\n\nRetrieved official source spans:\n${spanList}\n\n` +
+      (req.guidance ? `Operator guidance (prioritise this, but stay grounded in the sources): ${req.guidance}\n\n` : "") +
+      `Each claim's sourceId must be one of the provided span sourceIds, with that span's locator.`,
   });
-
-  const raw = parseJson<RawDraft>(textOf(msg));
 
   // Enforce grounding: drop any claim not bound to a provided span.
   const claims: Claim[] = (raw.claims ?? [])
