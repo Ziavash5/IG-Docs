@@ -259,6 +259,15 @@ p { margin: 14px 0; }
   padding: 20px 24px;
   margin: 28px 0;
 }
+.md-callout {
+  background: var(--color-bg-soft);
+  border-left: 3px solid var(--color-brand);
+  border-radius: 8px;
+  padding: 14px 20px;
+  margin: 20px 0;
+  font-size: 17px;
+  color: var(--color-ink);
+}
 
 .citations { margin: 32px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .citations-label { font-family: var(--font-head); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-faint); margin-right: 4px; }

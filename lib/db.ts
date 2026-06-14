@@ -150,6 +150,18 @@ export async function addPending(sourceId: string, urls: string[], maxTotal: num
   }
 }
 
+/** Increment a rate-limit bucket for the current time window; returns the new count. */
+export async function bumpRate(bucket: string, windowSeconds: number): Promise<number> {
+  const db = sql();
+  const [r] = await db`
+    insert into rate_limits (bucket, window_start, count)
+    values (${bucket}, to_timestamp(floor(extract(epoch from now()) / ${windowSeconds}) * ${windowSeconds}), 1)
+    on conflict (bucket, window_start) do update set count = rate_limits.count + 1
+    returning count
+  `;
+  return Number(r.count);
+}
+
 // ---- Leads (chat funnel) ----------------------------------------------------
 
 export interface LeadInput {
@@ -273,6 +285,8 @@ export interface StoredUnitInput {
   lastReviewed: string;
   cta?: string;
   body?: string;
+  author?: string;
+  credentials?: string;
   claims: { text: string; sourceId: string; locator: string; verified: boolean }[];
   citations: string[];
   queueReason?: string;
@@ -285,10 +299,11 @@ export async function storeUnit(u: StoredUnitInput): Promise<void> {
   await db`delete from units where id = ${u.id}`;
   await db`
     insert into units (id, slug, question, pillar, layer, corridor, jurisdictions,
-                       risk_tier, status, last_reviewed, cta, body, updated_at)
+                       risk_tier, status, last_reviewed, cta, body, author_name,
+                       author_credentials, updated_at)
     values (${u.id}, ${u.slug}, ${u.question}, ${u.pillar}, ${u.layer}, ${u.corridor},
             ${db.array(u.jurisdictions)}, ${u.riskTier}, ${u.status}, ${u.lastReviewed},
-            ${u.cta ?? null}, ${u.body ?? null}, now())
+            ${u.cta ?? null}, ${u.body ?? null}, ${u.author ?? null}, ${u.credentials ?? null}, now())
   `;
   for (const c of u.claims) {
     await db`
@@ -441,6 +456,8 @@ export interface PublicUnit {
   body: string | null;
   status: string;
   lastReviewed: string | null;
+  author: string | null;
+  credentials: string | null;
   citations: string[];
   claims: { text: string; sourceId: string; locator: string; verified: boolean }[];
 }
@@ -449,7 +466,7 @@ export interface PublicUnit {
 export async function getUnitContent(corridor: string, slug: string): Promise<PublicUnit | null> {
   const db = sql();
   const [u] = await db`
-    select id, question, body, status, last_reviewed from units
+    select id, question, body, status, last_reviewed, author_name, author_credentials from units
     where corridor = ${corridor} and slug = ${slug} limit 1
   `;
   if (!u) return null;
@@ -461,6 +478,8 @@ export async function getUnitContent(corridor: string, slug: string): Promise<Pu
     body: (u.body as string) ?? null,
     status: u.status as string,
     lastReviewed: u.last_reviewed ? String(u.last_reviewed).slice(0, 10) : null,
+    author: (u.author_name as string) ?? null,
+    credentials: (u.author_credentials as string) ?? null,
     citations: [...new Set(claims.map((c) => c.source_id as string))],
     claims: claims.map((c) => ({
       text: c.text as string,

@@ -11,6 +11,7 @@ import { anthropic, MODEL, textOf, parseJson } from "../anthropic";
 
 export interface DraftUnit {
   directAnswer: string;
+  keyTakeaways: string[];
   sections: { heading: string; body: string }[];
   corridorDelta?: string;
   checklist: string[];
@@ -29,6 +30,7 @@ export interface WriteRequest {
 
 interface RawDraft {
   directAnswer: string;
+  keyTakeaways: string[];
   sections: { heading: string; body: string }[];
   corridorDelta?: string;
   checklist: string[];
@@ -46,33 +48,36 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
     max_tokens: 8000,
     thinking: { type: "adaptive" },
     system:
-      "You are a senior cross-border advisor writing the authoritative reference for " +
-      "foreign companies setting up and operating in Canada, for a German audience. You write " +
-      "the specific, hard-to-find answer a generic blog cannot. The value is precision.\n\n" +
+      "You write for InterGest Canada, the definitive reference for German companies " +
+      "setting up and operating in Canada. Write like the sharpest cross-border advisory " +
+      "firm, NOT a compliance memo. The reader is a busy founder or finance lead who has to " +
+      "make a decision. Make it specific, concrete, and genuinely useful, not dry.\n\n" +
       "RULES:\n" +
-      "1. Use ONLY the provided official source spans for every factual statement, and cite " +
-      "each claim's sourceId and locator. Never invent figures, thresholds, section numbers, " +
-      "forms, or rules. If the spans do not support a point, leave it out.\n" +
-      "2. Be concrete. Pull the actual thresholds, dollar amounts, section references, form " +
-      "names, deadlines, and definitions out of the spans. Specificity is the product.\n" +
-      "3. NEVER write meta-commentary. Forbidden in the output: 'general information only', " +
-      "'we cannot confirm', 'no source spans were provided', any mention of sources being " +
-      "missing, of being an AI, or of your own process or limitations. If you lack the " +
-      "material to answer, write less, but never narrate that fact.\n" +
-      "4. directAnswer: answer the question directly and substantively in 2–4 sentences from " +
-      "the sources. No hedging preamble.\n" +
-      "5. Interpretive matters (treaty application, permanent establishment, transfer " +
-      "pricing, immigration eligibility): explain precisely what the rule is and which " +
-      "specific factors determine the outcome, grounded in the sources. State plainly that " +
-      "the determination depends on the company's particular facts. Do NOT assert the " +
-      "reader's specific conclusion. Do NOT add booking or sales language — the page handles " +
-      "that.\n" +
-      "6. corridorDelta: the concrete difference for a German parent (treaty article, " +
-      "CFC / Außensteuergesetz, totalization, EU/CETA), grounded in sources where possible.\n" +
-      "7. checklist: concrete next actions (forms, registrations, decisions), only if " +
-      "supported by the sources.\n" +
-      "Write in clear, confident, plain English. No filler, no throat-clearing. Respond with " +
-      "a single JSON object only.",
+      "1. Ground every factual statement in the provided official source spans and cite each " +
+      "claim's sourceId and locator. Never invent figures, thresholds, sections, forms, or " +
+      "rules. Worked examples are encouraged, but any number or rule inside an example must " +
+      "come from the sources; do not fabricate specifics.\n" +
+      "2. Pull the actual thresholds, amounts, section references, form names, and deadlines " +
+      "out of the spans. Specificity is the product.\n" +
+      "3. NEVER write meta-commentary (no 'general information only', no mention of sources " +
+      "being missing, of being an AI, or of your own limitations). If you lack material, " +
+      "write less, but never narrate that.\n" +
+      "4. directAnswer: answer the exact question in 2-4 confident sentences. No hedging preamble.\n" +
+      "5. keyTakeaways: 3-5 crisp, scannable bullets the reader can act on.\n" +
+      "6. sections: make it decision-useful and vivid, not a list of rules. Where the sources " +
+      "support it, include: the rule and what it depends on; a concrete WORKED EXAMPLE applying " +
+      "it to a typical German-company scenario; a 'What this means for your expansion' section " +
+      "with the strategic implication; and a 'Where it goes wrong' section covering the common " +
+      "mistakes and their consequences. Short paragraphs and bullets. You may use a single " +
+      "'> ' callout line for the most important point.\n" +
+      "7. corridorDelta: the concrete difference for a German parent (treaty, CFC / " +
+      "Außensteuergesetz, totalization, CETA), grounded.\n" +
+      "8. checklist: concrete next actions (forms, registrations, decisions), only if supported.\n" +
+      "9. Interpretive matters (treaty application, PE, transfer pricing, immigration " +
+      "eligibility): give the rule and the deciding factors, state plainly the outcome depends " +
+      "on the company's facts; do NOT assert their conclusion or add sales language.\n" +
+      "Voice: clear, confident, human, specific. NEVER use em-dashes; use commas or periods. " +
+      "Cover the decision end to end without padding. Respond with a single JSON object only.",
     messages: [
       {
         role: "user",
@@ -81,7 +86,7 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
           `Risk tier: ${req.riskTier}\n\nRetrieved official source spans:\n${spanList}\n\n` +
           (req.guidance ? `Operator guidance (prioritise this, but stay grounded in the sources): ${req.guidance}\n\n` : "") +
           `Return JSON with this shape:\n` +
-          `{"directAnswer": "...", "sections": [{"heading": "...", "body": "..."}], ` +
+          `{"directAnswer": "...", "keyTakeaways": ["..."], "sections": [{"heading": "...", "body": "..."}], ` +
           `"corridorDelta": "...", "checklist": ["..."], ` +
           `"claims": [{"text": "...", "sourceId": "<one of the span sourceIds>", "locator": "<that span's locator>"}]}`,
       },
@@ -97,6 +102,7 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
 
   return {
     directAnswer: raw.directAnswer ?? "",
+    keyTakeaways: raw.keyTakeaways ?? [],
     sections: raw.sections ?? [],
     corridorDelta: raw.corridorDelta,
     checklist: raw.checklist ?? [],

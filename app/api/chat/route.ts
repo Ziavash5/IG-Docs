@@ -3,15 +3,28 @@ import { anthropic, MODEL } from "@/lib/anthropic";
 import { CHAT_SYSTEM, type ChatTurn } from "@/lib/chat";
 import { selectSources, retrieveSpans } from "@/lib/pipeline/retrieve";
 import { getActiveCorridor } from "@/lib/corridor";
+import { bumpRate } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
+const RATE_PER_MIN = 15;
+
 /** Streaming grounded chat. Retrieves official passages, then streams a cited answer. */
 export async function POST(req: NextRequest) {
+  // Per-IP rate limit so the public endpoint can't run up the API bill.
+  const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+  try {
+    if ((await bumpRate(`chat:${ip}`, 60)) > RATE_PER_MIN) {
+      return new Response("Too many requests. Please wait a minute.", { status: 429 });
+    }
+  } catch {
+    /* if the limiter is unavailable, fail open */
+  }
+
   const { history } = (await req.json()) as { history: ChatTurn[] };
   const corridor = await getActiveCorridor();
-  const lastUser = [...(history ?? [])].reverse().find((t) => t.role === "user")?.content ?? "";
+  const lastUser = ([...(history ?? [])].reverse().find((t) => t.role === "user")?.content ?? "").slice(0, 2000);
 
   const sourceIds = await selectSources(lastUser, corridor);
   const spans = await retrieveSpans(lastUser, sourceIds, 8);

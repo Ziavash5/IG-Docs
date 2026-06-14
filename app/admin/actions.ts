@@ -552,6 +552,7 @@ export async function generateUnit(topicSlug: string, guidance?: string): Promis
 
     const body = [
       draft.directAnswer,
+      draft.keyTakeaways.length ? `## Key takeaways\n\n${draft.keyTakeaways.map((k) => `- ${k}`).join("\n")}` : "",
       ...draft.sections.map((s) => `## ${s.heading}\n\n${s.body}`),
       draft.corridorDelta ? `## How it differs for a German company\n\n${draft.corridorDelta}` : "",
       draft.checklist.length ? `## Checklist\n\n${draft.checklist.map((c) => `- ${c}`).join("\n")}` : "",
@@ -578,6 +579,8 @@ export async function generateUnit(topicSlug: string, guidance?: string): Promis
       status: decision === "auto-ship" ? "published" : "in_review",
       lastReviewed: new Date().toISOString().slice(0, 10),
       cta: "Book a 20-minute Canada-entry call",
+      author: process.env.AUTHOR_NAME || "InterGest Canada",
+      credentials: process.env.AUTHOR_CREDENTIALS || "Cross-border setup, tax & compliance, InterGest Canada",
       body,
       claims,
       citations: [...new Set(claims.map((c) => c.sourceId))],

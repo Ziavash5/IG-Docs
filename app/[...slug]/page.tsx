@@ -52,16 +52,22 @@ export default async function Page({ params }: { params: Promise<Params> }) {
 
 // ---- Markdown (minimal, for generated bodies) -------------------------------
 
+function mdInline(s: string) {
+  return s.split(/\*\*(.+?)\*\*/g).map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p));
+}
 function Markdown({ text }: { text: string }) {
   const blocks = text.split(/\n{2,}/).filter(Boolean);
   return (
     <>
       {blocks.map((b, i) => {
-        if (b.startsWith("## ")) return <h2 key={i}>{b.slice(3)}</h2>;
+        if (b.startsWith("## ")) return <h2 key={i}>{mdInline(b.slice(3))}</h2>;
+        if (b.startsWith("### ")) return <h3 key={i}>{mdInline(b.slice(4))}</h3>;
         const lines = b.split("\n");
+        if (lines.every((l) => l.startsWith("> ")))
+          return <blockquote key={i} className="md-callout">{mdInline(lines.map((l) => l.slice(2)).join(" "))}</blockquote>;
         if (lines.every((l) => l.startsWith("- ")))
-          return <ul key={i}>{lines.map((l, j) => <li key={j}>{l.slice(2)}</li>)}</ul>;
-        return <p key={i}>{b}</p>;
+          return <ul key={i}>{lines.map((l, j) => <li key={j}>{mdInline(l.slice(2))}</li>)}</ul>;
+        return <p key={i}>{mdInline(b)}</p>;
       })}
     </>
   );
@@ -172,6 +178,9 @@ function UnitView({
             </div>
           )}
           <div className="trust-strip">
+            {content!.author && (
+              <>Reviewed by {content!.author}{content!.credentials ? `, ${content!.credentials}` : ""}.<br /></>
+            )}
             General information, not advice. Your specific situation is decided on a call.
             <br />
             Last reviewed: {content!.lastReviewed ?? "pending"}
