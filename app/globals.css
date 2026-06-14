@@ -48,8 +48,11 @@ a:hover { text-decoration: underline; }
 p { margin: 14px 0; }
 .lead { font-size: 20px; color: var(--color-muted); max-width: 640px; }
 
-/* Long words/URLs wrap instead of forcing the page wider than the viewport. */
-h1, h2, h3, p, li, td, th, .source-chip { overflow-wrap: anywhere; }
+/* Long words/URLs wrap instead of forcing the page wider than the viewport.
+   Use break-word (not anywhere): it breaks an over-long word but keeps the
+   min-content width at the longest word, so flex rows can't crush a text
+   column down to one-letter-per-line. */
+h1, h2, h3, p, li, td, th, .source-chip { overflow-wrap: break-word; }
 
 /* ---- Shell ---------------------------------------------------------------- */
 /* minmax(0,1fr) lets the content column shrink below its content's intrinsic width
@@ -236,9 +239,11 @@ h1, h2, h3, p, li, td, th, .source-chip { overflow-wrap: anywhere; }
 .unit-list { list-style: none; padding: 0; margin: 28px 0; }
 .unit-list li { border-top: 1px solid var(--color-line); }
 .unit-list li:last-child { border-bottom: 1px solid var(--color-line); }
-.unit-link { display: flex; align-items: center; gap: 12px; padding: 16px 4px; color: var(--color-ink); }
+/* flex-wrap lets a crowded admin row drop its button group to the next line
+   instead of squeezing the question/title text into a sliver. */
+.unit-link { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 4px; color: var(--color-ink); }
 .unit-link:hover { text-decoration: none; color: var(--color-brand); }
-.unit-link-q { flex: 1; font-size: 16px; }
+.unit-link-q { flex: 1; font-size: 16px; min-width: 16ch; }
 .tier-chip { font-family: var(--font-head); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .tier-factual { background: #e7f4ec; color: #1f7a47; }
 .tier-interpretive { background: var(--color-bg-soft); color: #8a6320; border: 1px solid var(--color-brand-soft); }
