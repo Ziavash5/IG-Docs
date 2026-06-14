@@ -25,11 +25,19 @@ function resolve(journey: Stage[], slug: string[]) {
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
-  const r = resolve(await getCurriculum(await getActiveCorridor()), slug);
+  const corridor = await getActiveCorridor();
+  const r = resolve(await getCurriculum(corridor), slug);
   if (!r) return { title: "InterGest Canada" };
-  if (r.kind === "unit") return { title: `${r.unit.question} — InterGest Canada` };
-  if (r.kind === "pillar") return { title: `${r.pillar.title} — InterGest Canada` };
-  return { title: `${r.stage.label} — InterGest Canada` };
+  const canonical = `/${slug.join("/")}`;
+  if (r.kind === "unit") {
+    const c = await unitContent(corridor, r.unit.slug);
+    const desc = (c?.body?.replace(/[#*>\-]/g, "").replace(/\s+/g, " ").trim().slice(0, 155)) ||
+      `${r.unit.question} For a German company expanding to Canada, with official sources.`;
+    return { title: `${r.unit.question} — InterGest Canada`, description: desc, alternates: { canonical } };
+  }
+  if (r.kind === "pillar")
+    return { title: `${r.pillar.title} — InterGest Canada`, description: r.pillar.blurb, alternates: { canonical } };
+  return { title: `${r.stage.label} — InterGest Canada`, description: r.stage.tagline, alternates: { canonical } };
 }
 
 const riskLabel = (tier: string) =>
@@ -144,6 +152,8 @@ function UnitView({
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
+    ...(content?.lastReviewed ? { dateModified: content.lastReviewed } : {}),
+    ...(content?.author ? { author: { "@type": "Person", name: content.author, jobTitle: content.credentials ?? undefined } } : {}),
     mainEntity: [
       {
         "@type": "Question",
