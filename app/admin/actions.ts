@@ -761,8 +761,14 @@ export async function suggestEdits(
     // and (for non-append modes) whose anchor actually exists in the draft.
     const norm = (s: string) => s.replace(/\s+/g, " ").trim();
     const bodyNorm = norm(body);
-    const suggestions = (parsed.suggestions ?? [])
-      .map((s) => ({ ...s, newText: noEmDash(s.newText), reason: noEmDash(s.reason) }))
+    const suggestions = (Array.isArray(parsed.suggestions) ? parsed.suggestions : [])
+      .map((s) => ({
+        reason: noEmDash(String(s?.reason ?? "")),
+        mode: (["insert_after", "replace", "append_section"].includes(s?.mode) ? s.mode : "append_section") as EditSuggestion["mode"],
+        anchor: String(s?.anchor ?? ""),
+        newText: noEmDash(String(s?.newText ?? "")),
+        sourceIds: Array.isArray(s?.sourceIds) ? s.sourceIds.map(String) : [],
+      }))
       .filter((s) => s.newText.trim().length > 0)
       .filter((s) => s.sourceIds.some((id) => knownSources.has(id)))
       .filter((s) => s.mode === "append_section" || (s.anchor.trim() && bodyNorm.includes(norm(s.anchor))));

@@ -71,6 +71,34 @@ const WRITER_SCHEMA = {
 /** Strip em-dashes (kept out of all generated copy); leave en-dashes for pairs/ranges. */
 const noEmDash = (s: string) => (s ?? "").replace(/\s*—\s*/g, ", ");
 
+// The API does not strictly enforce tool-input schemas, so a field can come back as the
+// wrong type (e.g. keyTakeaways as a string, or a section as a bare string). Coerce
+// defensively so a malformed shape degrades gracefully instead of crashing generation.
+const toStr = (v: unknown): string => {
+  if (typeof v === "string") return v;
+  if (v == null) return "";
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return toStr(o.text ?? o.point ?? o.value ?? o.body ?? "");
+  }
+  return String(v);
+};
+const toBullets = (v: unknown): string[] => {
+  if (Array.isArray(v)) return v.map(toStr).map((s) => s.trim()).filter(Boolean);
+  if (typeof v === "string") return v.split(/\n+/).map((s) => s.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
+  return [];
+};
+const toSections = (v: unknown): { heading: string; body: string }[] => {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((s) => {
+      if (typeof s === "string") return { heading: "", body: s };
+      const o = (s ?? {}) as Record<string, unknown>;
+      return { heading: toStr(o.heading), body: toStr(o.body ?? o.text) };
+    })
+    .filter((s) => s.heading.trim() || s.body.trim());
+};
+
 export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
   const validSourceIds = new Set(req.spans.map((s) => s.chunk.sourceId));
   const spanList = req.spans
@@ -119,16 +147,18 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
   });
 
   // Enforce grounding: drop any claim not bound to a provided span.
-  const claims: Claim[] = (raw.claims ?? [])
+  const claims: Claim[] = (Array.isArray(raw.claims) ? raw.claims : [])
+    .map((c) => ({ text: toStr((c as { text?: unknown })?.text), sourceId: toStr((c as { sourceId?: unknown })?.sourceId), locator: toStr((c as { locator?: unknown })?.locator) }))
     .filter((c) => c.sourceId && c.locator && validSourceIds.has(c.sourceId))
     .map((c) => ({ text: noEmDash(c.text), sourceId: c.sourceId, locator: c.locator, verified: false }));
 
+  const corridorDelta = toStr(raw.corridorDelta).trim();
   return {
-    directAnswer: noEmDash(raw.directAnswer ?? ""),
-    keyTakeaways: (raw.keyTakeaways ?? []).map(noEmDash),
-    sections: (raw.sections ?? []).map((s) => ({ heading: noEmDash(s.heading), body: noEmDash(s.body) })),
-    corridorDelta: raw.corridorDelta ? noEmDash(raw.corridorDelta) : undefined,
-    checklist: (raw.checklist ?? []).map(noEmDash),
+    directAnswer: noEmDash(toStr(raw.directAnswer)),
+    keyTakeaways: toBullets(raw.keyTakeaways).map(noEmDash),
+    sections: toSections(raw.sections).map((s) => ({ heading: noEmDash(s.heading), body: noEmDash(s.body) })),
+    corridorDelta: corridorDelta ? noEmDash(corridorDelta) : undefined,
+    checklist: toBullets(raw.checklist).map(noEmDash),
     claims,
   };
 }
