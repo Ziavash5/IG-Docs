@@ -8,6 +8,8 @@ import { publishedQuestions } from "@/lib/db";
 import { BookCall } from "../components";
 import { LiveData } from "../live-data";
 import { AskDesk } from "../qa";
+import { getLang, getDict, translateDoc } from "@/lib/i18n";
+import { tr, type StringMap } from "@/lib/i18n-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -48,17 +50,24 @@ const riskLabel = (tier: string) =>
 export default async function Page({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
   const corridor = slug[0];
-  const journey = await getCurriculum(corridor);
+  const lang = await getLang();
+  const [journey, dict] = await Promise.all([getCurriculum(corridor), getDict(lang)]);
   const r = resolve(journey, slug.slice(1));
   if (!r) notFound();
 
-  if (r.kind === "stage") return <StageView corridor={corridor} stage={r.stage} />;
-  if (r.kind === "pillar") return <PillarView corridor={corridor} stage={r.stage} pillar={r.pillar} />;
+  if (r.kind === "stage") return <StageView corridor={corridor} stage={r.stage} dict={dict} />;
+  if (r.kind === "pillar") return <PillarView corridor={corridor} stage={r.stage} pillar={r.pillar} dict={dict} />;
 
   const content = await unitContent(corridor, r.unit.slug);
   const qa = await publishedQuestions(corridor, r.unit.slug).catch(() => []);
-  return <UnitView stageLabel={r.stage.label} corridor={corridor} unitSlug={r.unit.slug} qa={qa}
-    pillarTitle={r.pillar.title} pillarN={r.pillar.n} unit={r.unit} content={content} />;
+  // Translate the long content on demand (cached); chrome + nav strings come from `dict`.
+  const translatedBody = content?.body ? await translateDoc(lang, content.body) : content?.body ?? null;
+  const translatedQa = await Promise.all(
+    qa.map(async (q) => ({ question: tr(dict, q.question), answer: await translateDoc(lang, q.answer) })),
+  );
+  return <UnitView stageLabel={r.stage.label} corridor={corridor} unitSlug={r.unit.slug} qa={translatedQa}
+    pillarTitle={r.pillar.title} pillarN={r.pillar.n} unit={r.unit} content={content}
+    body={translatedBody} dict={dict} lang={lang} />;
 }
 
 // ---- Markdown (minimal, for generated bodies) -------------------------------
@@ -86,18 +95,18 @@ function Markdown({ text }: { text: string }) {
 
 // ---- Stage landing ----------------------------------------------------------
 
-function StageView({ corridor, stage }: { corridor: string; stage: Stage }) {
+function StageView({ corridor, stage, dict }: { corridor: string; stage: Stage; dict: StringMap }) {
   return (
     <>
-      <p className="eyebrow">{stage.label}</p>
-      <h1 style={{ fontSize: 40 }}>{stage.tagline}</h1>
+      <p className="eyebrow">{tr(dict, stage.label)}</p>
+      <h1 style={{ fontSize: 40 }}>{tr(dict, stage.tagline)}</h1>
       <div className="card-grid">
         {stage.pillars.map((p) => (
           <Link key={p.slug} href={pathFor(corridor, stage.slug, p.slug)} className="card">
             <span className="card-n">Pillar {p.n}</span>
-            <h3>{p.title}</h3>
-            <p className="card-service">{p.service}</p>
-            <p>{p.blurb}</p>
+            <h3>{tr(dict, p.title)}</h3>
+            <p className="card-service">{tr(dict, p.service)}</p>
+            <p>{tr(dict, p.blurb)}</p>
           </Link>
         ))}
       </div>
@@ -108,20 +117,18 @@ function StageView({ corridor, stage }: { corridor: string; stage: Stage }) {
 
 // ---- Pillar landing ---------------------------------------------------------
 
-function PillarView({ corridor, stage, pillar }: { corridor: string; stage: Stage; pillar: Stage["pillars"][number] }) {
+function PillarView({ corridor, stage, pillar, dict }: { corridor: string; stage: Stage; pillar: Stage["pillars"][number]; dict: StringMap }) {
   return (
     <>
-      <p className="eyebrow">{stage.label} · Pillar {pillar.n}</p>
-      <h1 style={{ fontSize: 38 }}>{pillar.title}</h1>
-      <p className="lead">{pillar.blurb}</p>
-      <p className="card-service" style={{ marginTop: -8 }}>InterGest service: {pillar.service}</p>
+      <p className="eyebrow">{tr(dict, stage.label)} · Pillar {pillar.n}</p>
+      <h1 style={{ fontSize: 38 }}>{tr(dict, pillar.title)}</h1>
+      <p className="lead">{tr(dict, pillar.blurb)}</p>
       <ul className="unit-list">
         {pillar.units.map((u) => (
           <li key={u.slug}>
             <Link href={pathFor(corridor, stage.slug, pillar.slug, u.slug)} className="unit-link">
               <span className={`nav-dot state-${u.state}`} aria-hidden />
-              <span className="unit-link-q">{u.question}</span>
-              <span className={`tier-chip tier-${u.riskTier}`}>{riskLabel(u.riskTier)}</span>
+              <span className="unit-link-q">{tr(dict, u.question)}</span>
             </Link>
           </li>
         ))}
@@ -134,12 +141,14 @@ function PillarView({ corridor, stage, pillar }: { corridor: string; stage: Stag
 // ---- Unit reading experience ------------------------------------------------
 
 function UnitView({
-  stageLabel, pillarTitle, pillarN, unit, content, corridor, unitSlug, qa,
+  stageLabel, pillarTitle, pillarN, unit, content, corridor, unitSlug, qa, body, dict, lang,
 }: {
   stageLabel: string; corridor: string; unitSlug: string;
   qa: { question: string; answer: string }[];
   pillarTitle: string; pillarN: number; unit: UnitEntry; content: PublicUnit | null;
+  body: string | null; dict: StringMap; lang: string;
 }) {
+  const translated = lang !== "en";
   // Prefer generated content from the DB; otherwise fall back to the in-code exemplar.
   const exemplar = findStaticUnit("enter", "decide-structure", unit.slug)?.unit.content;
   const hasGenerated = content?.body && content.status !== "planned";
@@ -177,27 +186,30 @@ function UnitView({
 
   return (
     <article>
-      <p className="eyebrow">{stageLabel} · Pillar {pillarN} · {pillarTitle}</p>
+      <p className="eyebrow">{tr(dict, stageLabel)} · Pillar {pillarN} · {tr(dict, pillarTitle)}</p>
       <div className="unit-head">
-        <h1 style={{ fontSize: 34 }}>{unit.question}</h1>
+        <h1 style={{ fontSize: 34 }}>{tr(dict, unit.question)}</h1>
         <span className={`status-badge state-${content?.status === "published" ? "published" : hasGenerated || exemplar ? "in_review" : "planned"}`}>
           {badge}
         </span>
       </div>
       {hasGenerated && (content!.lastReviewed || content!.author) && (
         <p className="reviewed-meta">
-          Last reviewed {content!.lastReviewed ?? "recently"}
+          {tr(dict, "Last reviewed")} {content!.lastReviewed ?? "recently"}
           {content!.author ? ` by ${content!.author}${content!.credentials ? `, ${content!.credentials}` : ""}` : ""}.
         </p>
+      )}
+      {hasGenerated && translated && (
+        <p className="translated-note">{tr(dict, "Machine-translated for convenience. The English version is authoritative.")}</p>
       )}
       {hasGenerated && <LiveData corridor={corridor} />}
 
       {hasGenerated ? (
         <>
-          <Markdown text={content!.body!} />
+          <Markdown text={body ?? content!.body!} />
           {content!.citations.length > 0 && (
             <div className="citations">
-              <span className="citations-label">Sources</span>
+              <span className="citations-label">{tr(dict, "Sources")}</span>
               {content!.citations.map((id) => (
                 <span key={id} className="source-chip">{id}</span>
               ))}
@@ -207,10 +219,11 @@ function UnitView({
             {content!.author && (
               <>Reviewed by {content!.author}{content!.credentials ? `, ${content!.credentials}` : ""}.<br /></>
             )}
-            General information, not advice. Your specific situation is decided on a call.
+            {tr(dict, "General information, not advice. Your specific situation is decided on a call.")}
             <br />
-            Last reviewed: {content!.lastReviewed ?? "pending"}
+            {tr(dict, "Last reviewed")}: {content!.lastReviewed ?? "pending"}
           </div>
+          {/* JSON-LD stays English: the authoritative, citable version for search and LLMs. */}
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         </>
       ) : exemplar ? (
@@ -254,7 +267,7 @@ function UnitView({
 
       {hasGenerated && qa.length > 0 && (
         <section className="qa-section">
-          <h2>Questions &amp; answers</h2>
+          <h2>{tr(dict, "Questions & answers")}</h2>
           {qa.map((item, i) => (
             <div key={i} className="qa-item">
               <p className="qa-q">{item.question}</p>

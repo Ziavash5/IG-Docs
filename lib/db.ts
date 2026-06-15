@@ -273,6 +273,47 @@ export async function deleteCorridor(slug: string): Promise<void> {
   await db`delete from corridors where slug = ${slug}`;
 }
 
+// ---- Languages + translation cache ------------------------------------------
+
+export async function listLanguages(): Promise<{ slug: string; label: string; nativeName: string | null }[]> {
+  const db = sql();
+  const rows = await db`select slug, label, native_name from languages order by created_at`;
+  return rows.map((r) => ({ slug: r.slug as string, label: r.label as string, nativeName: (r.native_name as string) ?? null }));
+}
+
+export async function insertLanguage(slug: string, label: string, nativeName?: string): Promise<void> {
+  const db = sql();
+  await db`insert into languages (slug, label, native_name) values (${slug}, ${label}, ${nativeName ?? null})
+           on conflict (slug) do update set label = excluded.label, native_name = excluded.native_name`;
+}
+
+export async function deleteLanguage(slug: string): Promise<void> {
+  const db = sql();
+  await db`delete from languages where slug = ${slug}`;
+  await db`delete from translations where lang = ${slug}`;
+}
+
+/** All short-string translations for a language, as a hash -> value map for fast lookup. */
+export async function getStringMap(lang: string): Promise<Record<string, string>> {
+  const db = sql();
+  const rows = await db`select source_key, value from translations where lang = ${lang} and kind = 's'`;
+  const out: Record<string, string> = {};
+  for (const r of rows) out[r.source_key as string] = r.value as string;
+  return out;
+}
+
+export async function getTranslation(lang: string, kind: string, sourceKey: string): Promise<string | null> {
+  const db = sql();
+  const [r] = await db`select value from translations where lang = ${lang} and kind = ${kind} and source_key = ${sourceKey} limit 1`;
+  return r ? (r.value as string) : null;
+}
+
+export async function setTranslation(lang: string, kind: string, sourceKey: string, value: string): Promise<void> {
+  const db = sql();
+  await db`insert into translations (lang, kind, source_key, value) values (${lang}, ${kind}, ${sourceKey}, ${value})
+           on conflict (lang, kind, source_key) do update set value = excluded.value, created_at = now()`;
+}
+
 // ---- Custom sources ---------------------------------------------------------
 
 export async function listCustomSources(): Promise<Source[]> {

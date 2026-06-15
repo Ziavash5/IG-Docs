@@ -3,8 +3,9 @@ import { allSources } from "@/lib/sources-registry";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
 import { openQueue, ingestStats, sourceChunkCounts, listLeads, pendingQuestions, type QueueRow, type LeadRow, type QuestionRow } from "@/lib/db";
 import { approveUnit, rejectUnit, seedCurriculum, recoverCurriculum, clearCurriculum } from "./actions";
-import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar, CtaSettings, QaReviewItem } from "./buttons";
+import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar, CtaSettings, QaReviewItem, LanguageManager } from "./buttons";
 import { getCta } from "@/lib/cta";
+import { allLanguages } from "@/lib/i18n";
 import { PillarEditor } from "./curriculum";
 import { SourcePanel } from "./source-panel";
 
@@ -25,6 +26,7 @@ export default async function Admin() {
   let sources = await allSources();
   let corridors = await allCorridors();
   const corridorName = corridors.find((c) => c.slug === corridor)?.label ?? corridor;
+  const languages = await allLanguages();
   let cta = await getCta();
   let dbError: string | null = null;
   try {
@@ -213,8 +215,17 @@ export default async function Admin() {
         <QaReviewItem key={q.id} q={{ id: q.id, corridor: q.corridor, unitSlug: q.unitSlug, question: q.question, email: q.email }} />
       ))}
 
-      {/* 6 — Settings */}
-      <h2 style={{ marginTop: 48 }}>6 · Settings</h2>
+      {/* 6 — Languages */}
+      <h2 style={{ marginTop: 48 }}>6 · Languages</h2>
+      <p style={{ color: "var(--color-muted)" }}>
+        Add a language and the public site gets a picker for it. Navigation and labels are
+        AI-translated on demand; guide content is translated (and cached) the first time it is
+        viewed in that language. English stays the authoritative version.
+      </p>
+      <LanguageManager languages={languages} />
+
+      {/* 7 — Settings */}
+      <h2 style={{ marginTop: 48 }}>7 · Settings</h2>
       <p style={{ color: "var(--color-muted)" }}>
         The booking CTA shown at the bottom of guides, cited in <code>/llms.txt</code>, and
         offered in the chat. Use your Calendly/booking URL when ready.

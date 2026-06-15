@@ -4,23 +4,31 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { pathFor, type Stage } from "@/lib/content";
-import { setCorridor } from "./admin/actions";
+import { setCorridor, setLang } from "./admin/actions";
+import { tr, type StringMap } from "@/lib/i18n-shared";
 
 type CorridorItem = { slug: string; label: string; active: boolean };
+type LanguageItem = { slug: string; label: string; nativeName: string | null };
 
 /**
- * Left navigation: home-country selector, then journey stages → pillars → units.
- * The tree (`journey`) comes from the editable, DB-backed curriculum. On mobile it
- * collapses behind a toggle.
+ * Left navigation: home-country selector, language picker, then journey stages → pillars
+ * → units. The tree (`journey`) comes from the editable, DB-backed curriculum; labels are
+ * translated via `dict` (English source falls through untouched). Collapses on mobile.
  */
 export default function Nav({
   journey,
   corridors,
   active,
+  languages,
+  lang,
+  dict,
 }: {
   journey: Stage[];
   corridors: CorridorItem[];
   active: string;
+  languages: LanguageItem[];
+  lang: string;
+  dict: StringMap;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -44,7 +52,7 @@ export default function Nav({
       </div>
 
       <div className="corridor-field">
-        <label htmlFor="corridor">Where your company is based</label>
+        <label htmlFor="corridor">{tr(dict, "Where your company is based")}</label>
         <div className="corridor-select-wrap">
           <select
             id="corridor"
@@ -63,11 +71,34 @@ export default function Nav({
             {corridors.map((c) => (
               <option key={c.slug} value={c.slug} disabled={!c.active}>
                 {c.label}
-                {c.active ? "" : " (coming soon)"}
+                {c.active ? "" : ` (${tr(dict, "coming soon")})`}
               </option>
             ))}
           </select>
         </div>
+
+        {languages.length > 1 && (
+          <div style={{ marginTop: 12 }}>
+            <label htmlFor="lang">{tr(dict, "Language")}</label>
+            <div className="corridor-select-wrap">
+              <select
+                id="lang"
+                value={lang}
+                className="corridor-select"
+                onChange={async (e) => {
+                  await setLang(e.target.value);
+                  router.refresh();
+                }}
+              >
+                {languages.map((l) => (
+                  <option key={l.slug} value={l.slug}>
+                    {l.nativeName || l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className={`nav-scroll${open ? " is-open" : ""}`}>
@@ -78,7 +109,7 @@ export default function Nav({
               className="nav-stage-label"
               onClick={close}
             >
-              {stage.label}
+              {tr(dict, stage.label)}
             </Link>
             {stage.pillars.map((pillar) => {
               const pillarPath = pathFor(active, stage.slug, pillar.slug);
@@ -91,7 +122,7 @@ export default function Nav({
                     onClick={close}
                   >
                     <span className="nav-pillar-n">{pillar.n}</span>
-                    {pillar.title}
+                    {tr(dict, pillar.title)}
                   </Link>
                   <ul className="nav-units">
                     {pillar.units.map((u) => {
@@ -109,7 +140,7 @@ export default function Nav({
                             aria-current={isActive ? "page" : undefined}
                           >
                             <span className={`nav-dot state-${u.state}`} aria-hidden />
-                            {u.title}
+                            {tr(dict, u.title)}
                           </Link>
                         </li>
                       );

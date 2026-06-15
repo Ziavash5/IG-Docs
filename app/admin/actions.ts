@@ -41,8 +41,11 @@ import {
   deleteQuestion,
   deleteUnitFor,
   deleteTopicsForCorridor,
+  insertLanguage,
+  deleteLanguage,
 } from "@/lib/db";
 import { runFreshnessCheck } from "@/lib/freshness";
+import { syncStrings } from "@/lib/i18n";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
 import { cookies } from "next/headers";
 import { anthropic, MODEL, textOf, jsonCall } from "@/lib/anthropic";
@@ -986,6 +989,50 @@ export async function setCorridor(slug: string): Promise<void> {
   (await cookies()).set("corridor", slug, { path: "/", maxAge: 60 * 60 * 24 * 365 });
   revalidatePath("/admin");
   revalidatePath("/", "layout");
+}
+
+/** Set the reader's language (cookie). */
+export async function setLang(slug: string): Promise<void> {
+  (await cookies()).set("lang", slug, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+  revalidatePath("/", "layout");
+}
+
+const slugifyLang = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "").slice(0, 8);
+
+/** Add a language the site can be translated into. */
+export async function addLanguage(label: string, code: string, nativeName: string): Promise<ActionResult> {
+  const slug = slugifyLang(code) || slugifyLang(label);
+  if (!slug || !label.trim()) return { ok: false, message: "Give a language name and a short code (e.g. de, ja)." };
+  try {
+    await insertLanguage(slug, label.trim(), nativeName.trim() || undefined);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Added ${label}. Click "Translate now" to fill its UI labels.` };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+export async function removeLanguage(slug: string): Promise<ActionResult> {
+  try {
+    await deleteLanguage(slug);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Language removed." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Translate + cache all UI/label/nav strings for a language (one pass, resumable). */
+export async function syncLanguage(slug: string): Promise<ActionResult> {
+  try {
+    const n = await syncStrings(slug);
+    revalidatePath("/", "layout");
+    return { ok: true, message: n > 0 ? `Translated ${n} labels.` : "All labels already translated." };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
 }
 
 export async function addCorridor(label: string): Promise<ActionResult> {

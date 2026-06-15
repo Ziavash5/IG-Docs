@@ -6,7 +6,7 @@ import type { ActionResult } from "./actions";
 import {
   assessUnit, generateUnit, addSource, addPdfSource, ingestAllStep, autopilotStep,
   discoverSources, checkSourceFreshness, setCorridor, addCorridor, saveCta,
-  draftAnswer, publishQuestion, dismissQuestion,
+  draftAnswer, publishQuestion, dismissQuestion, addLanguage, removeLanguage, syncLanguage,
 } from "./actions";
 
 type QItem = { id: string; corridor: string; unitSlug: string; question: string; email: string | null };
@@ -474,6 +474,81 @@ export function AssessButton({ slug }: { slug: string }) {
           <pre>{res.text ?? res.message}</pre>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Add languages and translate the UI/labels into them (AI, cached). */
+export function LanguageManager({
+  languages,
+}: {
+  languages: { slug: string; label: string; nativeName: string | null }[];
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [label, setLabel] = useState("");
+  const [code, setCode] = useState("");
+  const [native, setNative] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const run = (fn: () => Promise<ActionResult>, busy = "Working…") =>
+    start(async () => {
+      setMsg(busy);
+      try {
+        const r = await fn();
+        setMsg(r.message);
+        router.refresh();
+      } catch {
+        setMsg("Stopped early. Try again.");
+      }
+    });
+
+  const added = languages.filter((l) => l.slug !== "en");
+
+  return (
+    <div>
+      {added.length > 0 && (
+        <ul className="source-list" style={{ marginTop: 4 }}>
+          {added.map((l) => (
+            <li key={l.slug} className="source-row">
+              <div className="source-row-main">
+                <div className="source-row-text">
+                  <div className="source-row-title">{l.label}{l.nativeName ? ` · ${l.nativeName}` : ""}</div>
+                  <div className="source-row-meta"><code className="source-row-id">{l.slug}</code></div>
+                </div>
+              </div>
+              <div className="source-row-actions">
+                <button className="ghost-btn" disabled={pending} onClick={() => run(() => syncLanguage(l.slug), "Translating…")}>Translate now</button>
+                <button className="ghost-btn" disabled={pending} onClick={() => run(() => removeLanguage(l.slug), "Removing…")}>Remove</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="assist-bar" style={{ marginTop: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <input className="assist-input" style={{ minWidth: 150 }} placeholder="Language (e.g. German)" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <input className="assist-input" style={{ minWidth: 90, flex: "0 0 90px" }} placeholder="Code (de)" value={code} onChange={(e) => setCode(e.target.value)} />
+        <input className="assist-input" style={{ minWidth: 130 }} placeholder="Native name (Deutsch)" value={native} onChange={(e) => setNative(e.target.value)} />
+        <button
+          className="book-call-btn"
+          disabled={pending}
+          onClick={() =>
+            run(async () => {
+              const r = await addLanguage(label, code, native);
+              if (r.ok) { setLabel(""); setCode(""); setNative(""); }
+              return r;
+            }, "Adding…")
+          }
+        >
+          Add language
+        </button>
+        {msg && <span className="action-msg ok">{msg}</span>}
+      </div>
+      <p style={{ color: "var(--color-faint)", fontSize: 13, marginTop: 8 }}>
+        After adding, click <strong>Translate now</strong> to fill the navigation and labels.
+        Guide content is translated automatically the first time it is viewed in that language,
+        and the English version stays authoritative.
+      </p>
     </div>
   );
 }

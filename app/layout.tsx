@@ -4,6 +4,7 @@ import Nav from "./nav";
 import ChatWidget from "./chat-widget";
 import { getCurriculum } from "@/lib/curriculum";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
+import { getLang, getDict, allLanguages } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "InterGest Canada — The Art of Being Local in Canada",
@@ -18,12 +19,18 @@ export const metadata: Metadata = {
  */
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const corridor = await getActiveCorridor();
-  const [journey, corridors] = await Promise.all([getCurriculum(corridor), allCorridors()]);
+  const lang = await getLang();
+  const [journey, corridors, languages, dict] = await Promise.all([
+    getCurriculum(corridor),
+    allCorridors(),
+    allLanguages(),
+    getDict(lang),
+  ]);
   return (
-    <html lang="en">
+    <html lang={lang}>
       <body>
         <div className="shell">
-          <Nav journey={journey} corridors={corridors} active={corridor} />
+          <Nav journey={journey} corridors={corridors} active={corridor} languages={languages} lang={lang} dict={dict} />
           <main className="content">
             <div className="col">{children}</div>
           </main>
