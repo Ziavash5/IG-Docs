@@ -35,7 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="col">{children}</div>
           </main>
         </div>
-        <ChatWidget />
+        <ChatWidget dict={dict} />
       </body>
     </html>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { saveLead } from "./chat-actions";
+import { tr, type StringMap } from "@/lib/i18n-shared";
 
 type Msg = { role: "user" | "assistant"; content: string; sources?: string[]; suggestCall?: boolean };
 
@@ -34,7 +35,7 @@ const STARTERS = [
   "How do I move an employee to our Canadian office?",
 ];
 
-export default function ChatWidget() {
+export default function ChatWidget({ dict }: { dict?: StringMap }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -47,7 +48,7 @@ export default function ChatWidget() {
   const endRef = useRef<HTMLDivElement>(null);
 
   const submitLead = async () => {
-    setLeadMsg("Sending…");
+    setLeadMsg(tr(dict, "Sending…"));
     const question = [...msgs].reverse().find((m) => m.role === "user")?.content ?? "";
     const transcript = msgs.map((m) => `${m.role}: ${m.content}`).join("\n");
     const r = await saveLead({ ...lead, question, transcript });
@@ -98,7 +99,7 @@ export default function ChatWidget() {
     } catch {
       setMsgs((cur) => {
         const copy = [...cur];
-        copy[copy.length - 1] = { role: "assistant", content: "Something went wrong. Please try again.", suggestCall: true };
+        copy[copy.length - 1] = { role: "assistant", content: tr(dict, "Something went wrong. Please try again."), suggestCall: true };
         return copy;
       });
     } finally {
@@ -109,34 +110,34 @@ export default function ChatWidget() {
   return (
     <>
       {!open && (
-        <button className="chat-fab" onClick={() => setOpen(true)} aria-label="Ask a question">
-          Ask about Canada
+        <button className="chat-fab" onClick={() => setOpen(true)} aria-label={tr(dict, "Ask about Canada")}>
+          {tr(dict, "Ask about Canada")}
         </button>
       )}
       {open && (
         <div className="chat-panel" role="dialog" aria-label="InterGest Canada assistant">
           <div className="chat-head">
             <div>
-              <strong>Ask InterGest Canada</strong>
-              <p>Answers from official sources. For your specifics, we&rsquo;ll point you to a call.</p>
+              <strong>{tr(dict, "Ask InterGest Canada")}</strong>
+              <p>{tr(dict, "Answers from official sources. For your specifics, we'll point you to a call.")}</p>
             </div>
             <div className="chat-head-actions">
               {msgs.length > 0 && (
-                <button className="chat-x" title="New conversation" aria-label="New conversation"
+                <button className="chat-x" title={tr(dict, "New conversation")} aria-label={tr(dict, "New conversation")}
                   onClick={() => { setMsgs([]); setLeadOpen(false); setLeadDone(false); setLeadMsg(""); setInput(""); }}>
-                  New
+                  {tr(dict, "New")}
                 </button>
               )}
-              <button className="chat-x" onClick={() => setOpen(false)} aria-label="Close">✕</button>
+              <button className="chat-x" onClick={() => setOpen(false)} aria-label={tr(dict, "Close")}>✕</button>
             </div>
           </div>
 
           <div className="chat-body">
             {msgs.length === 0 && (
               <div className="chat-starters">
-                <p>Try:</p>
+                <p>{tr(dict, "Try:")}</p>
                 {STARTERS.map((s) => (
-                  <button key={s} className="chat-starter" onClick={() => send(s)}>{s}</button>
+                  <button key={s} className="chat-starter" onClick={() => send(s)}>{tr(dict, s)}</button>
                 ))}
               </div>
             )}
@@ -156,7 +157,7 @@ export default function ChatWidget() {
                 )}
                 {m.role === "assistant" && m.suggestCall && !leadDone && (
                   <button className="chat-cta" onClick={() => setLeadOpen(true)}>
-                    Get the answer for your company →
+                    {tr(dict, "Get the answer for your company →")}
                   </button>
                 )}
               </div>
@@ -166,23 +167,23 @@ export default function ChatWidget() {
 
           {leadOpen && (
             <div className="chat-lead">
-              <strong>Get the specifics for your company</strong>
-              <p>Leave your details and the InterGest Canada team will follow up with the answer for your situation. No obligation.</p>
-              <input placeholder="Name" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} />
-              <input placeholder="Work email" value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} />
-              <input placeholder="Company" value={lead.company} onChange={(e) => setLead({ ...lead, company: e.target.value })} />
+              <strong>{tr(dict, "Get the specifics for your company")}</strong>
+              <p>{tr(dict, "Leave your details and the InterGest Canada team will follow up with the answer for your situation. No obligation.")}</p>
+              <input placeholder={tr(dict, "Name")} value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} />
+              <input placeholder={tr(dict, "Work email")} value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} />
+              <input placeholder={tr(dict, "Company")} value={lead.company} onChange={(e) => setLead({ ...lead, company: e.target.value })} />
               <div className="chat-lead-row">
-                <button className="chat-lead-send" onClick={submitLead}>Send</button>
-                <button className="chat-lead-cancel" onClick={() => setLeadOpen(false)}>Cancel</button>
+                <button className="chat-lead-send" onClick={submitLead}>{tr(dict, "Send")}</button>
+                <button className="chat-lead-cancel" onClick={() => setLeadOpen(false)}>{tr(dict, "Cancel")}</button>
                 {leadMsg && <span className="chat-lead-msg">{leadMsg}</span>}
               </div>
             </div>
           )}
-          {leadDone && <div className="chat-lead-done">✓ Thanks. We&rsquo;ll be in touch shortly.</div>}
+          {leadDone && <div className="chat-lead-done">✓ {tr(dict, "Thanks. We'll be in touch shortly.")}</div>}
 
           <form className="chat-input" onSubmit={(e) => { e.preventDefault(); send(input); }}>
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask a question…" disabled={busy} />
-            <button type="submit" disabled={busy || !input.trim()}>Send</button>
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={tr(dict, "Ask a question…")} disabled={busy} />
+            <button type="submit" disabled={busy || !input.trim()}>{tr(dict, "Send")}</button>
           </form>
         </div>
       )}

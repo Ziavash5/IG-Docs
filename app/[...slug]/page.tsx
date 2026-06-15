@@ -8,10 +8,11 @@ import { publishedQuestions } from "@/lib/db";
 import { BookCall } from "../components";
 import { LiveData } from "../live-data";
 import { AskDesk } from "../qa";
-import { getLang, getDict, translateDoc } from "@/lib/i18n";
+import { getLang, getDict, translateDocCached } from "@/lib/i18n";
 import { tr, type StringMap } from "@/lib/i18n-shared";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 type Params = { slug: string[] };
 
@@ -61,9 +62,9 @@ export default async function Page({ params }: { params: Promise<Params> }) {
   const content = await unitContent(corridor, r.unit.slug);
   const qa = await publishedQuestions(corridor, r.unit.slug).catch(() => []);
   // Translate the long content on demand (cached); chrome + nav strings come from `dict`.
-  const translatedBody = content?.body ? await translateDoc(lang, content.body) : content?.body ?? null;
+  const translatedBody = content?.body ? await translateDocCached(lang, content.body) : content?.body ?? null;
   const translatedQa = await Promise.all(
-    qa.map(async (q) => ({ question: tr(dict, q.question), answer: await translateDoc(lang, q.answer) })),
+    qa.map(async (q) => ({ question: tr(dict, q.question), answer: await translateDocCached(lang, q.answer) })),
   );
   return <UnitView stageLabel={r.stage.label} corridor={corridor} unitSlug={r.unit.slug} qa={translatedQa}
     pillarTitle={r.pillar.title} pillarN={r.pillar.n} unit={r.unit} content={content}
@@ -103,7 +104,7 @@ function StageView({ corridor, stage, dict }: { corridor: string; stage: Stage; 
       <div className="card-grid">
         {stage.pillars.map((p) => (
           <Link key={p.slug} href={pathFor(corridor, stage.slug, p.slug)} className="card">
-            <span className="card-n">Pillar {p.n}</span>
+            <span className="card-n">{tr(dict, "Pillar")} {p.n}</span>
             <h3>{tr(dict, p.title)}</h3>
             <p className="card-service">{tr(dict, p.service)}</p>
             <p>{tr(dict, p.blurb)}</p>
@@ -120,7 +121,7 @@ function StageView({ corridor, stage, dict }: { corridor: string; stage: Stage; 
 function PillarView({ corridor, stage, pillar, dict }: { corridor: string; stage: Stage; pillar: Stage["pillars"][number]; dict: StringMap }) {
   return (
     <>
-      <p className="eyebrow">{tr(dict, stage.label)} · Pillar {pillar.n}</p>
+      <p className="eyebrow">{tr(dict, stage.label)} · {tr(dict, "Pillar")} {pillar.n}</p>
       <h1 style={{ fontSize: 38 }}>{tr(dict, pillar.title)}</h1>
       <p className="lead">{tr(dict, pillar.blurb)}</p>
       <ul className="unit-list">
@@ -186,7 +187,7 @@ function UnitView({
 
   return (
     <article>
-      <p className="eyebrow">{tr(dict, stageLabel)} · Pillar {pillarN} · {tr(dict, pillarTitle)}</p>
+      <p className="eyebrow">{tr(dict, stageLabel)} · {tr(dict, "Pillar")} {pillarN} · {tr(dict, pillarTitle)}</p>
       <div className="unit-head">
         <h1 style={{ fontSize: 34 }}>{tr(dict, unit.question)}</h1>
         <span className={`status-badge state-${content?.status === "published" ? "published" : hasGenerated || exemplar ? "in_review" : "planned"}`}>
@@ -196,7 +197,7 @@ function UnitView({
       {hasGenerated && (content!.lastReviewed || content!.author) && (
         <p className="reviewed-meta">
           {tr(dict, "Last reviewed")} {content!.lastReviewed ?? "recently"}
-          {content!.author ? ` by ${content!.author}${content!.credentials ? `, ${content!.credentials}` : ""}` : ""}.
+          {content!.author ? ` ${tr(dict, "by")} ${content!.author}${content!.credentials ? `, ${content!.credentials}` : ""}` : ""}.
         </p>
       )}
       {hasGenerated && translated && (

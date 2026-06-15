@@ -188,6 +188,21 @@ export async function translateStep(lang: string): Promise<TranslateStep> {
 }
 
 /**
+ * Cache-only document lookup for page rendering: returns the cached translation if present,
+ * otherwise the English original. It never calls the model, so a page render never blocks on
+ * translation (the bulk "Translate everything" autopilot fills the cache). English is shown
+ * until then, never a blank or a timeout.
+ */
+export async function translateDocCached(lang: string, markdown: string): Promise<string> {
+  if (lang === DEFAULT_LANG || !markdown.trim()) return markdown;
+  try {
+    return (await getTranslation(lang, "d", hashText(markdown))) ?? markdown;
+  } catch {
+    return markdown;
+  }
+}
+
+/**
  * Translate a long markdown document (a unit body or answer), cached by content hash so it
  * re-translates only when the English changes. Preserves markdown, numbers, statute refs,
  * source-id chips, and URLs.
