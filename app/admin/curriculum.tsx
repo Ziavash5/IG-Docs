@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addTopic, editTopic, removeTopic, generateUnit, suggest, reorder, autoOrder, checkQuality, resetUnitContent } from "./actions";
+import { addTopic, editTopic, removeTopic, generateUnit, suggest, reorder, autoOrder, checkQuality, resetUnitContent, discoverPillarSources, addDiscoveredSource } from "./actions";
 import type { SuggestedTopic } from "@/lib/curriculum";
 
 type Risk = "factual" | "interpretive";
@@ -34,6 +34,7 @@ export function PillarEditor({
   const [suggestions, setSuggestions] = useState<SuggestedTopic[]>([]);
   const [adding, setAdding] = useState(false);
   const [assessment, setAssessment] = useState("");
+  const [foundSources, setFoundSources] = useState<{ body: string; url: string; status: "new" | "adding" | "added" | "failed" }[]>([]);
 
   const slugs = units.map((u) => u.slug);
   const move = (i: number, dir: -1 | 1) => {
@@ -64,6 +65,30 @@ export function PillarEditor({
       } catch {
         setMsg("Suggestion failed.");
       }
+    });
+
+  const runFindSources = () =>
+    start(async () => {
+      setMsg("Searching for official sources for these questions…");
+      setFoundSources([]);
+      try {
+        const r = await discoverPillarSources(pillarTitle, units.map((u) => u.question));
+        if (!r.ok) { setMsg(`Failed: ${r.message}`); return; }
+        setFoundSources(r.sources.map((s) => ({ ...s, status: "new" as const })));
+        setMsg(r.sources.length ? `${r.sources.length} source(s) proposed.` : "No new sources proposed.");
+      } catch {
+        setMsg("Source discovery failed.");
+      }
+    });
+
+  const addFound = (i: number) =>
+    start(async () => {
+      const s = foundSources[i];
+      if (!s || s.status === "added") return;
+      setFoundSources((cur) => cur.map((x, j) => (j === i ? { ...x, status: "adding" } : x)));
+      const r = await addDiscoveredSource(s.body, s.url);
+      setFoundSources((cur) => cur.map((x, j) => (j === i ? { ...x, status: r.ok ? "added" : "failed" } : x)));
+      setMsg(r.ok ? "Added. Ingest it in section 2 (Ingest sources)." : `Failed: ${r.message}`);
     });
 
   return (
@@ -116,6 +141,7 @@ export function PillarEditor({
       <div className="pillar-tools">
         <button className="ghost-btn" onClick={() => setAdding((v) => !v)}>{adding ? "Close" : "Add topic"}</button>
         <button className="ghost-btn" disabled={pending} onClick={runSuggest}>Suggest topics (AI)</button>
+        <button className="ghost-btn" disabled={pending || units.length === 0} onClick={runFindSources}>Find sources (AI)</button>
         <button className="ghost-btn" disabled={pending || units.length < 2} onClick={() => run(() => autoOrder(pillarSlug, pillarTitle))}>Auto-order (AI)</button>
         <button className="ghost-btn" disabled={pending} onClick={() =>
           start(async () => {
@@ -150,6 +176,35 @@ export function PillarEditor({
             </li>
           ))}
         </ul>
+      )}
+
+      {foundSources.length > 0 && (
+        <div style={{ margin: "12px 0" }}>
+          <p style={{ fontSize: 12, color: "var(--color-faint)", margin: "0 0 8px" }}>
+            Official sources proposed for this pillar&rsquo;s questions. Add the ones you want, then
+            ingest them in section 2.
+          </p>
+          <ul className="suggest-list">
+            {foundSources.map((s, i) => (
+              <li key={i}>
+                <span style={{ flex: 1, fontSize: 14, minWidth: 0 }}>
+                  <strong style={{ fontWeight: 600 }}>{s.body}</strong>
+                  <br />
+                  <a href={s.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, wordBreak: "break-all" }}>{s.url}</a>
+                </span>
+                {s.status === "added" ? (
+                  <span className="action-msg ok">Added</span>
+                ) : s.status === "failed" ? (
+                  <span className="action-msg err">Failed</span>
+                ) : (
+                  <button className="ghost-btn" disabled={pending || s.status === "adding"} onClick={() => addFound(i)}>
+                    {s.status === "adding" ? "Adding…" : "Add source"}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {adding && (

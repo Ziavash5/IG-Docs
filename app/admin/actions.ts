@@ -539,6 +539,57 @@ export async function discoverSources(
   }
 }
 
+/**
+ * AI proposes official sources whose content can answer a specific set of curriculum
+ * questions (one pillar block), for the active corridor. You pick which to add; they are
+ * tagged to the current corridor and ingested from section 2 so Generate/Autopilot can
+ * cite them.
+ */
+export async function discoverPillarSources(
+  pillarTitle: string,
+  questions: string[],
+): Promise<{ ok: boolean; message?: string; sources: { body: string; url: string }[] }> {
+  try {
+    const label = await corridorLabel(await getActiveCorridor());
+    const existing = (await allSources()).map((s) => `${s.body} ${s.url}`);
+    const parsed = await jsonCall<{ sources: { body: string; url: string }[] }>({
+      schema: {
+        type: "object", additionalProperties: false, required: ["sources"],
+        properties: {
+          sources: {
+            type: "array",
+            items: {
+              type: "object", additionalProperties: false, required: ["body", "url"],
+              properties: { body: { type: "string" }, url: { type: "string" } },
+            },
+          },
+        },
+      },
+      system:
+        `You propose OFFICIAL government bodies and primary-law sources (with real canonical ` +
+        `URLs) whose content can ANSWER the specific questions below, for a company from ${label} ` +
+        "setting up or operating in Canada. Only official/government/primary-law sites (e.g. " +
+        "canada.ca, laws-lois.justice.gc.ca, cra-arc.gc.ca, official home-country government and " +
+        "legislation sites, official treaty texts), never blogs, advisory firms, or commentary. " +
+        "Give the specific page most likely to contain the answer, not just a homepage. Do not " +
+        "repeat sources already listed.",
+      user:
+        `Corridor: ${label}\nPillar: ${pillarTitle}\n\nQuestions to answer:\n` +
+        `${questions.map((q) => `- ${q}`).join("\n")}\n\nAlready in the registry:\n${existing.join("\n")}\n\n` +
+        `Propose up to 6 official sources that would let us answer these questions well.`,
+    });
+    const sources = (parsed.sources ?? []).filter((s) => s.body && /^https?:\/\//.test(s.url));
+    return { ok: true, sources };
+  } catch (e) {
+    return { ok: false, message: errMsg(e), sources: [] };
+  }
+}
+
+/** Add a discovered source to the active corridor (crawled), then it can be ingested. */
+export async function addDiscoveredSource(body: string, url: string): Promise<ActionResult> {
+  return addSource({ body, url, corridor: await getActiveCorridor(), crawl: true });
+}
+
 /** Re-fetch a source's seed page, detect a content change, and flag units that cite it. */
 export async function checkSourceFreshness(
   sourceId: string,
