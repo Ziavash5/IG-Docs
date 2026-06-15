@@ -6,6 +6,8 @@ import {
   getStringMap,
   getTranslation,
   setTranslation,
+  publishedUnitBodies,
+  publishedQaAnswers,
 } from "./db";
 import { listTopics } from "./db";
 import { allCorridors } from "./corridor";
@@ -92,15 +94,8 @@ async function translateBatch(texts: string[], langLabel: string): Promise<strin
   return out;
 }
 
-/**
- * Translate and cache every short UI/label string for a language: the fixed UI strings,
- * plus all stage/pillar copy and every corridor's topic titles and questions (so the nav
- * and landing pages render translated). One pass; safe to re-run.
- */
-export async function syncStrings(lang: string): Promise<number> {
-  if (lang === DEFAULT_LANG) return 0;
-  const label = await labelFor(lang);
-
+/** Every short string that should be translated: fixed UI + stage/pillar copy + topics. */
+async function collectStrings(): Promise<string[]> {
   const set = new Set<string>(UI_STRINGS);
   for (const s of journey) {
     set.add(s.label);
@@ -121,10 +116,18 @@ export async function syncStrings(lang: string): Promise<number> {
   } catch {
     /* topics optional */
   }
+  return [...set].filter((s) => s.trim());
+}
 
-  // Only translate strings we do not already have cached, in chunks.
+/**
+ * Translate and cache every short UI/label string for a language (one pass). Used by the
+ * "Translate now" button; safe to re-run (skips already-cached strings).
+ */
+export async function syncStrings(lang: string): Promise<number> {
+  if (lang === DEFAULT_LANG) return 0;
+  const label = await labelFor(lang);
   const have = await getStringMap(lang);
-  const todo = [...set].filter((s) => s.trim() && !have[hashText(s)]);
+  const todo = (await collectStrings()).filter((s) => !have[hashText(s)]);
   let done = 0;
   const CHUNK = 40;
   for (let i = 0; i < todo.length; i += CHUNK) {
@@ -136,6 +139,52 @@ export async function syncStrings(lang: string): Promise<number> {
     }
   }
   return done;
+}
+
+export interface TranslateStep { done: boolean; remaining: number; message: string }
+
+/**
+ * One unit of bulk-translation work, looped by the client (like ingest). Priority: finish
+ * the UI/label strings, then translate each published guide body, then each published Q&A
+ * answer. Returns done=true when everything for the language is cached.
+ */
+export async function translateStep(lang: string): Promise<TranslateStep> {
+  if (lang === DEFAULT_LANG) return { done: true, remaining: 0, message: "English needs no translation." };
+  const label = await labelFor(lang);
+
+  // 1) UI / nav / label strings, a chunk at a time.
+  const have = await getStringMap(lang);
+  const todoStrings = (await collectStrings()).filter((s) => !have[hashText(s)]);
+  if (todoStrings.length) {
+    const slice = todoStrings.slice(0, 40);
+    const translated = await translateBatch(slice, label);
+    for (let j = 0; j < slice.length; j++) await setTranslation(lang, "s", hashText(slice[j]), translated[j]);
+    const remaining = todoStrings.length - slice.length;
+    return { done: false, remaining, message: `Labels: translated ${slice.length}, ${remaining} left.` };
+  }
+
+  // 2) Published guide bodies, one per step.
+  const bodies = await publishedUnitBodies();
+  const uncachedBodies: { corridor: string; slug: string; body: string }[] = [];
+  for (const u of bodies) {
+    if (!(await getTranslation(lang, "d", hashText(u.body)))) uncachedBodies.push(u);
+  }
+  if (uncachedBodies.length) {
+    const u = uncachedBodies[0];
+    await translateDoc(lang, u.body);
+    return { done: false, remaining: uncachedBodies.length - 1, message: `Translated guide ${u.corridor}/${u.slug}. ${uncachedBodies.length - 1} guides left.` };
+  }
+
+  // 3) Published Q&A answers, one per step.
+  const answers = await publishedQaAnswers();
+  for (const a of answers) {
+    if (!(await getTranslation(lang, "d", hashText(a)))) {
+      await translateDoc(lang, a);
+      return { done: false, remaining: 0, message: "Translated a Q&A answer." };
+    }
+  }
+
+  return { done: true, remaining: 0, message: `All content is translated into ${label}.` };
 }
 
 /**

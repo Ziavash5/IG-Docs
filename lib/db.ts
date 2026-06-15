@@ -314,6 +314,20 @@ export async function setTranslation(lang: string, kind: string, sourceKey: stri
            on conflict (lang, kind, source_key) do update set value = excluded.value, created_at = now()`;
 }
 
+/** Published unit bodies across all corridors, for bulk translation. */
+export async function publishedUnitBodies(): Promise<{ corridor: string; slug: string; body: string }[]> {
+  const db = sql();
+  const rows = await db`select corridor, slug, body from units where status = 'published' and body is not null and body <> ''`;
+  return rows.map((r) => ({ corridor: r.corridor as string, slug: r.slug as string, body: r.body as string }));
+}
+
+/** Published reader Q&A answers, for bulk translation. */
+export async function publishedQaAnswers(): Promise<string[]> {
+  const db = sql();
+  const rows = await db`select answer from questions where status = 'published' and answer is not null and answer <> ''`;
+  return rows.map((r) => r.answer as string);
+}
+
 // ---- Custom sources ---------------------------------------------------------
 
 export async function listCustomSources(): Promise<Source[]> {

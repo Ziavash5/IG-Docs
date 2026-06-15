@@ -45,7 +45,7 @@ import {
   deleteLanguage,
 } from "@/lib/db";
 import { runFreshnessCheck } from "@/lib/freshness";
-import { syncStrings } from "@/lib/i18n";
+import { syncStrings, translateStep } from "@/lib/i18n";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
 import { cookies } from "next/headers";
 import { anthropic, MODEL, textOf, jsonCall } from "@/lib/anthropic";
@@ -1032,6 +1032,17 @@ export async function syncLanguage(slug: string): Promise<ActionResult> {
     return { ok: true, message: n > 0 ? `Translated ${n} labels.` : "All labels already translated." };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** One step of bulk translation (labels, then guides, then Q&A), looped by the client. */
+export async function translateAllStep(slug: string): Promise<StepResult> {
+  try {
+    const r = await translateStep(slug);
+    revalidatePath("/", "layout");
+    return { ok: true, done: r.done, message: r.message };
+  } catch (e) {
+    return { ok: false, done: true, message: `Failed: ${errMsg(e)}` };
   }
 }
 

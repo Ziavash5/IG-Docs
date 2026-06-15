@@ -3,6 +3,7 @@ import { anthropic, MODEL } from "@/lib/anthropic";
 import { CHAT_SYSTEM, type ChatTurn } from "@/lib/chat";
 import { selectSources, retrieveSpans } from "@/lib/pipeline/retrieve";
 import { getActiveCorridor } from "@/lib/corridor";
+import { allLanguages } from "@/lib/i18n";
 import { bumpRate } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +27,27 @@ export async function POST(req: NextRequest) {
   const corridor = await getActiveCorridor();
   const lastUser = ([...(history ?? [])].reverse().find((t) => t.role === "user")?.content ?? "").slice(0, 2000);
 
+  // Answer in the reader's chosen language; retrieval/grounding stays on the English corpus.
+  const lang = req.cookies.get("lang")?.value || "en";
+  let langLabel = "";
+  if (lang !== "en") {
+    try {
+      langLabel = (await allLanguages()).find((l) => l.slug === lang)?.label ?? "";
+    } catch {
+      langLabel = "";
+    }
+  }
+
   const sourceIds = await selectSources(lastUser, corridor);
   const spans = await retrieveSpans(lastUser, sourceIds, 8);
   const sources = [...new Set(spans.map((s) => s.chunk.sourceId))].slice(0, 6);
   const context = spans.map((s) => `[${s.chunk.sourceId}] ${s.chunk.text}`).join("\n\n") || "(no passages retrieved)";
+
+  const langRule = langLabel
+    ? `\n\nWrite your entire reply to the user in ${langLabel}. Keep source ids, numbers, ` +
+      "statute and agency names, and the brand in their original form. Output the [[CALL]] " +
+      "token exactly as [[CALL]] (do not translate it)."
+    : "";
 
   const stream = anthropic().messages.stream({
     model: MODEL,
@@ -37,7 +55,8 @@ export async function POST(req: NextRequest) {
     system:
       `${CHAT_SYSTEM}\n\nOfficial source passages you may use:\n${context}\n\n` +
       "Answer grounded only in these passages. Do not use em-dashes. If the answer depends " +
-      "on the company's specifics, end your reply with the token [[CALL]] on its own line.",
+      "on the company's specifics, end your reply with the token [[CALL]] on its own line." +
+      langRule,
     messages: (history ?? []).slice(-8).map((t) => ({ role: t.role, content: t.content })),
   });
 

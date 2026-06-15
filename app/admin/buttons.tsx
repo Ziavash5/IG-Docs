@@ -6,7 +6,7 @@ import type { ActionResult } from "./actions";
 import {
   assessUnit, generateUnit, addSource, addPdfSource, ingestAllStep, autopilotStep,
   discoverSources, checkSourceFreshness, setCorridor, addCorridor, saveCta,
-  draftAnswer, publishQuestion, dismissQuestion, addLanguage, removeLanguage, syncLanguage,
+  draftAnswer, publishQuestion, dismissQuestion, addLanguage, removeLanguage, syncLanguage, translateAllStep,
 } from "./actions";
 
 type QItem = { id: string; corridor: string; unitSlug: string; question: string; email: string | null };
@@ -490,6 +490,8 @@ export function LanguageManager({
   const [code, setCode] = useState("");
   const [native, setNative] = useState("");
   const [msg, setMsg] = useState("");
+  const [running, setRunning] = useState(false);
+  const stop = useRef(false);
 
   const run = (fn: () => Promise<ActionResult>, busy = "Working…") =>
     start(async () => {
@@ -502,6 +504,24 @@ export function LanguageManager({
         setMsg("Stopped early. Try again.");
       }
     });
+
+  // Client-driven loop: translate everything for a language, one step per call, until done.
+  const translateAll = async (slug: string) => {
+    setRunning(true);
+    stop.current = false;
+    try {
+      for (;;) {
+        if (stop.current) { setMsg("Paused. Click again to resume."); break; }
+        const r = await translateAllStep(slug);
+        setMsg(r.message);
+        if (!r.ok || r.done) break;
+        await new Promise((res) => setTimeout(res, 300));
+      }
+    } finally {
+      setRunning(false);
+      router.refresh();
+    }
+  };
 
   const added = languages.filter((l) => l.slug !== "en");
 
@@ -518,8 +538,13 @@ export function LanguageManager({
                 </div>
               </div>
               <div className="source-row-actions">
-                <button className="ghost-btn" disabled={pending} onClick={() => run(() => syncLanguage(l.slug), "Translating…")}>Translate now</button>
-                <button className="ghost-btn" disabled={pending} onClick={() => run(() => removeLanguage(l.slug), "Removing…")}>Remove</button>
+                {running ? (
+                  <button className="ghost-btn" onClick={() => (stop.current = true)}>Stop</button>
+                ) : (
+                  <button className="book-call-btn" disabled={pending} onClick={() => translateAll(l.slug)}>Translate everything</button>
+                )}
+                <button className="ghost-btn" disabled={pending || running} onClick={() => run(() => syncLanguage(l.slug), "Translating…")}>Labels only</button>
+                <button className="ghost-btn" disabled={pending || running} onClick={() => run(() => removeLanguage(l.slug), "Removing…")}>Remove</button>
               </div>
             </li>
           ))}
@@ -545,9 +570,11 @@ export function LanguageManager({
         {msg && <span className="action-msg ok">{msg}</span>}
       </div>
       <p style={{ color: "var(--color-faint)", fontSize: 13, marginTop: 8 }}>
-        After adding, click <strong>Translate now</strong> to fill the navigation and labels.
-        Guide content is translated automatically the first time it is viewed in that language,
-        and the English version stays authoritative.
+        After adding, click <strong>Translate everything</strong> to translate the navigation,
+        labels, and every published guide and Q&amp;A in one run (keep this tab open; it reports
+        when complete). <strong>Labels only</strong> does just the navigation and chrome. Guides
+        are also translated automatically the first time they are viewed in a language, and the
+        English version stays authoritative.
       </p>
     </div>
   );
