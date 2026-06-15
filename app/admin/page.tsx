@@ -2,7 +2,7 @@ import { getCurriculum, isSeeded } from "@/lib/curriculum";
 import { allSources } from "@/lib/sources-registry";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
 import { openQueue, ingestStats, sourceChunkCounts, listLeads, pendingQuestions, type QueueRow, type LeadRow, type QuestionRow } from "@/lib/db";
-import { approveUnit, rejectUnit, seedCurriculum, recoverCurriculum } from "./actions";
+import { approveUnit, rejectUnit, seedCurriculum, recoverCurriculum, clearCurriculum } from "./actions";
 import { ActionButton, AssessButton, RegenerateBox, AddSourceForm, PdfUploadForm, AutopilotButton, DiscoverPanel, FreshnessButton, CorridorBar, CtaSettings, QaReviewItem } from "./buttons";
 import { getCta } from "@/lib/cta";
 import { PillarEditor } from "./curriculum";
@@ -78,6 +78,12 @@ export default async function Admin() {
           <ActionButton action={seedCurriculum} idleLabel={`Seed starter curriculum for ${corridorName}`} busyLabel="Seeding…" variant="primary" />
         )}
         <ActionButton action={recoverCurriculum} idleLabel="Recover content" busyLabel="Recovering…" />
+        <ActionButton
+          action={clearCurriculum}
+          idleLabel="Clear all topics"
+          busyLabel="Clearing…"
+          confirm={`Delete every topic in the ${corridorName} curriculum? Generated content is kept and can be restored with Recover content.`}
+        />
         <span style={{ color: "var(--color-faint)", fontSize: 13, flexBasis: "100%" }}>
           {seeded
             ? "Recover content rebuilds topics from any generated units that lost their topic (e.g. earlier deletions)."

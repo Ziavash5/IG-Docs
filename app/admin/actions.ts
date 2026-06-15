@@ -40,6 +40,7 @@ import {
   publishQuestionAnswer,
   deleteQuestion,
   deleteUnitFor,
+  deleteTopicsForCorridor,
 } from "@/lib/db";
 import { runFreshnessCheck } from "@/lib/freshness";
 import { getActiveCorridor, allCorridors } from "@/lib/corridor";
@@ -74,10 +75,25 @@ const slugify = (s: string) =>
 export async function seedCurriculum(): Promise<ActionResult> {
   try {
     const corridor = await getActiveCorridor();
-    const n = await seedDefaults(corridor);
+    const label = await corridorLabel(corridor);
+    const n = await seedDefaults(corridor, label);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
-    return { ok: true, message: `Seeded ${n} topics for ${await corridorLabel(corridor)}.` };
+    return { ok: true, message: `Seeded ${n} topics for ${label}.` };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Wipe the active corridor's topics so it can be re-seeded clean. Content/units are kept
+    (use Recover content to bring them back). */
+export async function clearCurriculum(): Promise<ActionResult> {
+  try {
+    const corridor = await getActiveCorridor();
+    const n = await deleteTopicsForCorridor(corridor);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Cleared ${n} topic(s). Generated content is kept, click Recover content to restore it.` };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
@@ -130,11 +146,11 @@ export async function addTopic(
 }
 
 export async function editTopic(
-  id: string,
+  slug: string,
   t: { title: string; question: string; riskTier: RiskTier },
 ): Promise<ActionResult> {
   try {
-    await updateTopic(id, { title: t.title, question: t.question, riskTier: t.riskTier });
+    await updateTopic(await getActiveCorridor(), slug, { title: t.title, question: t.question, riskTier: t.riskTier });
     revalidatePath("/admin");
     revalidatePath("/", "layout");
     return { ok: true, message: "Saved." };
@@ -143,12 +159,12 @@ export async function editTopic(
   }
 }
 
-export async function removeTopic(id: string): Promise<ActionResult> {
+export async function removeTopic(slug: string): Promise<ActionResult> {
   try {
-    await deleteTopic(id);
+    const removed = await deleteTopic(await getActiveCorridor(), slug);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
-    return { ok: true, message: "Removed." };
+    return removed > 0 ? { ok: true, message: "Removed." } : { ok: false, message: "Nothing to remove." };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
@@ -171,7 +187,7 @@ export async function suggest(
 /** Persist a manual reorder (client passes the new slug order for one pillar). */
 export async function reorder(orderedSlugs: string[]): Promise<ActionResult> {
   try {
-    await reorderTopics(orderedSlugs);
+    await reorderTopics(await getActiveCorridor(), orderedSlugs);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
     return { ok: true, message: "Reordered." };
@@ -183,9 +199,10 @@ export async function reorder(orderedSlugs: string[]): Promise<ActionResult> {
 /** Let AI order a pillar's topics into a logical sequence. */
 export async function autoOrder(pillarSlug: string, pillarTitle: string): Promise<ActionResult> {
   try {
-    const topics = (await listTopics(await getActiveCorridor())).filter((t) => t.pillarSlug === pillarSlug);
+    const corridor = await getActiveCorridor();
+    const topics = (await listTopics(corridor)).filter((t) => t.pillarSlug === pillarSlug);
     const ordered = await autoOrderSlugs(pillarTitle, topics.map((t) => ({ slug: t.slug, question: t.question })));
-    await reorderTopics(ordered);
+    await reorderTopics(corridor, ordered);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
     return { ok: true, message: "Reordered by AI." };

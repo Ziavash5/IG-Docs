@@ -368,11 +368,13 @@ export function ActionButton({
   idleLabel,
   busyLabel,
   variant = "ghost",
+  confirm,
 }: {
   action: () => Promise<ActionResult>;
   idleLabel: string;
   busyLabel: string;
   variant?: "ghost" | "primary";
+  confirm?: string;
 }) {
   const [pending, start] = useTransition();
   const [res, setRes] = useState<ActionResult | null>(null);
@@ -383,7 +385,8 @@ export function ActionButton({
         type="button"
         className={variant === "primary" ? "book-call-btn" : "ghost-btn"}
         disabled={pending}
-        onClick={() =>
+        onClick={() => {
+          if (confirm && !window.confirm(confirm)) return;
           start(async () => {
             setRes(null);
             try {
@@ -395,8 +398,8 @@ export function ActionButton({
                   "Stopped before finishing (often a 60s timeout on Hobby). Check Vercel logs.",
               });
             }
-          })
-        }
+          });
+        }}
       >
         {pending ? busyLabel : idleLabel}
       </button>

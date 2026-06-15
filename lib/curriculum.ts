@@ -67,8 +67,8 @@ export async function unitContent(corridor: string, slug: string): Promise<Publi
 }
 
 /** Seed one corridor's topics from the in-code defaults (idempotent). */
-export async function seedDefaults(corridor: string): Promise<number> {
-  const rows = defaultTopicRows(corridor);
+export async function seedDefaults(corridor: string, label = "Germany"): Promise<number> {
+  const rows = defaultTopicRows(corridor, label);
   for (const r of rows) await insertTopic(r);
   return rows.length;
 }

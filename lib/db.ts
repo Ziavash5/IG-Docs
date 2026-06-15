@@ -469,27 +469,36 @@ export async function insertTopic(t: TopicRow): Promise<void> {
 }
 
 export async function updateTopic(
-  id: string,
+  corridor: string,
+  slug: string,
   fields: { title: string; question: string; riskTier: string },
 ): Promise<void> {
   const db = sql();
   await db`
     update topics set title = ${fields.title}, question = ${fields.question},
-      risk_tier = ${fields.riskTier} where id = ${id}
+      risk_tier = ${fields.riskTier} where corridor = ${corridor} and slug = ${slug}
   `;
 }
 
-export async function deleteTopic(id: string): Promise<void> {
+export async function deleteTopic(corridor: string, slug: string): Promise<number> {
   const db = sql();
-  await db`delete from topics where id = ${id}`;
+  const rows = await db`delete from topics where corridor = ${corridor} and slug = ${slug} returning id`;
+  return rows.length;
 }
 
-/** Persist an explicit order for a set of topic ids (position = index). */
-export async function reorderTopics(orderedIds: string[]): Promise<void> {
+/** Persist an explicit order for a corridor's topics (position = index of its slug). */
+export async function reorderTopics(corridor: string, orderedSlugs: string[]): Promise<void> {
   const db = sql();
-  for (let i = 0; i < orderedIds.length; i++) {
-    await db`update topics set position = ${i} where id = ${orderedIds[i]}`;
+  for (let i = 0; i < orderedSlugs.length; i++) {
+    await db`update topics set position = ${i} where corridor = ${corridor} and slug = ${orderedSlugs[i]}`;
   }
+}
+
+/** Delete every topic for a corridor (units/content are left intact and recoverable). */
+export async function deleteTopicsForCorridor(corridor: string): Promise<number> {
+  const db = sql();
+  const rows = await db`delete from topics where corridor = ${corridor} returning id`;
+  return rows.length;
 }
 
 export async function topicCount(corridor: string): Promise<number> {

@@ -360,20 +360,38 @@ export interface TopicRow {
   position: number;
 }
 
-/** Flatten the default journey into topic rows for one corridor, for seeding. */
-export function defaultTopicRows(corridor: string): TopicRow[] {
+/** Rewrite a Germany-flavoured default question for another corridor's country. */
+function forCorridor(text: string, label: string): string {
+  return text
+    .replace(/\ba German GmbH\b/g, `a company from ${label}`)
+    .replace(/\bGerman GmbH\b/g, `company from ${label}`)
+    .replace(/\bGmbH\b/g, "company")
+    .replace(/\ba German company\b/g, `a company from ${label}`)
+    .replace(/\bGerman company\b/g, `company from ${label}`)
+    .replace(/\bGerman\b/g, label)
+    .replace(/\bGermany\b/g, label);
+}
+
+/**
+ * Flatten the default journey into topic rows for one corridor, for seeding.
+ * The in-code journey is Germany-flavoured, so for any other corridor we strip the
+ * `germany-` slug prefix and substitute the corridor's country into the question text.
+ */
+export function defaultTopicRows(corridor: string, label = "Germany"): TopicRow[] {
+  const isGermany = corridor === "germany";
   const rows: TopicRow[] = [];
   for (const s of journey) {
     for (const p of s.pillars) {
       p.units.forEach((u, i) => {
+        const slug = isGermany ? u.slug : u.slug.replace(/^germany-/, "");
         rows.push({
-          id: `${corridor}-${u.slug}`,
+          id: `${corridor}-${slug}`,
           corridor,
           stage: s.slug,
           pillarSlug: p.slug,
-          slug: u.slug,
+          slug,
           title: u.title,
-          question: u.question,
+          question: isGermany ? u.question : forCorridor(u.question, label),
           riskTier: u.riskTier,
           position: i,
         });
