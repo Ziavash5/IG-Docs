@@ -339,8 +339,18 @@ export function pillarBySlug(slug: string): { n: number; title: string; service:
   return undefined;
 }
 
+/** Map a pillar number back to its stage + pillar slug (used to rebuild topics from units). */
+export function pillarByNumber(n: number): { stageSlug: string; pillarSlug: string; title: string } | undefined {
+  for (const s of journey) {
+    const p = s.pillars.find((x) => x.n === n);
+    if (p) return { stageSlug: s.slug, pillarSlug: p.slug, title: p.title };
+  }
+  return undefined;
+}
+
 export interface TopicRow {
   id: string;
+  corridor: string;
   stage: string;
   pillarSlug: string;
   slug: string;
@@ -350,14 +360,15 @@ export interface TopicRow {
   position: number;
 }
 
-/** Flatten the default journey into topic rows, for seeding the editable curriculum. */
-export function defaultTopicRows(): TopicRow[] {
+/** Flatten the default journey into topic rows for one corridor, for seeding. */
+export function defaultTopicRows(corridor: string): TopicRow[] {
   const rows: TopicRow[] = [];
   for (const s of journey) {
     for (const p of s.pillars) {
       p.units.forEach((u, i) => {
         rows.push({
-          id: u.slug,
+          id: `${corridor}-${u.slug}`,
+          corridor,
           stage: s.slug,
           pillarSlug: p.slug,
           slug: u.slug,

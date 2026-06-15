@@ -21,6 +21,8 @@ export interface DraftUnit {
 export interface WriteRequest {
   question: string;
   corridor: Corridor;
+  /** Human label for the corridor's home country, e.g. "Germany", "Japan". */
+  corridorLabel?: string;
   pillar: Pillar;
   riskTier: "factual" | "interpretive";
   spans: RetrievedSpan[];
@@ -105,11 +107,12 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
     .map((s, i) => `[span ${i}] sourceId=${s.chunk.sourceId} locator=${s.chunk.locator}\n${s.chunk.text}`)
     .join("\n\n");
 
+  const label = req.corridorLabel ?? "the home country";
   const raw = await jsonCall<RawDraft>({
     maxTokens: 8000,
     schema: WRITER_SCHEMA,
     system:
-      "You write for InterGest Canada, the definitive reference for German companies " +
+      `You write for InterGest Canada, the definitive reference for companies from ${label} ` +
       "setting up and operating in Canada. Write like the sharpest cross-border advisory " +
       "firm, NOT a compliance memo. The reader is a busy founder or finance lead who has to " +
       "make a decision. Make it specific, concrete, and genuinely useful, not dry.\n\n" +
@@ -127,12 +130,13 @@ export async function writeUnit(req: WriteRequest): Promise<DraftUnit> {
       "5. keyTakeaways: 3-5 crisp, scannable bullets the reader can act on.\n" +
       "6. sections: make it decision-useful and vivid, not a list of rules. Where the sources " +
       "support it, include: the rule and what it depends on; a concrete WORKED EXAMPLE applying " +
-      "it to a typical German-company scenario; a 'What this means for your expansion' section " +
-      "with the strategic implication; and a 'Where it goes wrong' section covering the common " +
-      "mistakes and their consequences. Short paragraphs and bullets. You may use a single " +
+      `it to a typical scenario for a company from ${label}; a 'What this means for your expansion' ` +
+      "section with the strategic implication; and a 'Where it goes wrong' section covering the " +
+      "common mistakes and their consequences. Short paragraphs and bullets. You may use a single " +
       "'> ' callout line for the most important point.\n" +
-      "7. corridorDelta: the concrete difference for a German parent (treaty, CFC / " +
-      "Außensteuergesetz, totalization, CETA), grounded.\n" +
+      `7. corridorDelta: the concrete difference for a parent company from ${label} (the relevant ` +
+      "tax treaty, home-country CFC / anti-deferral rules, the social-security/totalization " +
+      "agreement, and any trade agreement), grounded in the sources.\n" +
       "8. checklist: concrete next actions (forms, registrations, decisions), only if supported.\n" +
       "9. Interpretive matters (treaty application, PE, transfer pricing, immigration " +
       "eligibility): give the rule and the deciding factors, state plainly the outcome depends " +

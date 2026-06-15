@@ -17,7 +17,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
   // Published units only.
   try {
-    const [topics, status] = await Promise.all([listTopics(), unitStatusBySlug(DEFAULT_CORRIDOR)]);
+    const [topics, status] = await Promise.all([listTopics(DEFAULT_CORRIDOR), unitStatusBySlug(DEFAULT_CORRIDOR)]);
     for (const t of topics) {
       if (status[t.slug] === "published") {
         urls.push({ url: `${BASE}/${c}/${t.stage}/${t.pillarSlug}/${t.slug}`, changeFrequency: "monthly", priority: 0.8 });

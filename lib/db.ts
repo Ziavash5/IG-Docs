@@ -439,14 +439,15 @@ export async function ingestStats(): Promise<{ sources: number; chunks: number }
 
 // ---- Curriculum (editable topics) -------------------------------------------
 
-export async function listTopics(): Promise<TopicRow[]> {
+export async function listTopics(corridor: string): Promise<TopicRow[]> {
   const db = sql();
   const rows = await db`
-    select id, stage, pillar_slug, slug, title, question, risk_tier, position
-    from topics order by pillar_slug, position
+    select id, corridor, stage, pillar_slug, slug, title, question, risk_tier, position
+    from topics where corridor = ${corridor} order by pillar_slug, position
   `;
   return rows.map((r) => ({
     id: r.id as string,
+    corridor: r.corridor as string,
     stage: r.stage as string,
     pillarSlug: r.pillar_slug as string,
     slug: r.slug as string,
@@ -460,8 +461,8 @@ export async function listTopics(): Promise<TopicRow[]> {
 export async function insertTopic(t: TopicRow): Promise<void> {
   const db = sql();
   await db`
-    insert into topics (id, stage, pillar_slug, slug, title, question, risk_tier, position)
-    values (${t.id}, ${t.stage}, ${t.pillarSlug}, ${t.slug}, ${t.title}, ${t.question},
+    insert into topics (id, corridor, stage, pillar_slug, slug, title, question, risk_tier, position)
+    values (${t.id}, ${t.corridor}, ${t.stage}, ${t.pillarSlug}, ${t.slug}, ${t.title}, ${t.question},
             ${t.riskTier}, ${t.position})
     on conflict (id) do nothing
   `;
@@ -491,10 +492,26 @@ export async function reorderTopics(orderedIds: string[]): Promise<void> {
   }
 }
 
-export async function topicCount(): Promise<number> {
+export async function topicCount(corridor: string): Promise<number> {
   const db = sql();
-  const [r] = await db`select count(*)::int as n from topics`;
+  const [r] = await db`select count(*)::int as n from topics where corridor = ${corridor}`;
   return Number(r.n);
+}
+
+/** Generated units for a corridor, for rebuilding topics that were orphaned by deletes. */
+export async function unitsForCorridor(
+  corridor: string,
+): Promise<{ slug: string; question: string; pillar: number; riskTier: string }[]> {
+  const db = sql();
+  const rows = await db`
+    select slug, question, pillar, risk_tier from units where corridor = ${corridor}
+  `;
+  return rows.map((r) => ({
+    slug: r.slug as string,
+    question: r.question as string,
+    pillar: Number(r.pillar),
+    riskTier: (r.risk_tier as string) ?? "factual",
+  }));
 }
 
 /** unit status keyed by slug for one corridor, so the curriculum shows what's generated. */
@@ -509,6 +526,14 @@ export async function unitStatusBySlug(corridor: string): Promise<Record<string,
 export async function deleteUnit(id: string): Promise<void> {
   const db = sql();
   await db`delete from units where id = ${id}`;
+}
+
+/** Delete a corridor's unit by (corridor, slug) regardless of how its id was formed.
+    Returns how many rows were removed so callers can report honestly. */
+export async function deleteUnitFor(corridor: string, slug: string): Promise<number> {
+  const db = sql();
+  const rows = await db`delete from units where corridor = ${corridor} and slug = ${slug} returning id`;
+  return rows.length;
 }
 
 export interface PublicUnit {
@@ -550,9 +575,10 @@ export async function getUnitContent(corridor: string, slug: string): Promise<Pu
   };
 }
 
-export async function saveUnitBody(slug: string, body: string): Promise<void> {
+export async function saveUnitBody(corridor: string, slug: string, body: string): Promise<void> {
   const db = sql();
-  await db`update units set body = ${body}, updated_at = now() where slug = ${slug}`;
+  // Scope by corridor so editing one corridor's body never touches another's.
+  await db`update units set body = ${body}, updated_at = now() where corridor = ${corridor} and slug = ${slug}`;
 }
 
 /** Browse a source's passages (paginated), for the corpus explorer. */

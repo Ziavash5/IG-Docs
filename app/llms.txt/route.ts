@@ -25,7 +25,7 @@ export async function GET() {
   ];
 
   try {
-    const [topics, status] = await Promise.all([listTopics(), unitStatusBySlug(DEFAULT_CORRIDOR)]);
+    const [topics, status] = await Promise.all([listTopics(DEFAULT_CORRIDOR), unitStatusBySlug(DEFAULT_CORRIDOR)]);
     for (const stage of journey) {
       const inStage = topics.filter(
         (t) => t.stage === stage.slug && status[t.slug] === "published",

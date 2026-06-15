@@ -39,19 +39,27 @@ import {
   setSetting,
   publishQuestionAnswer,
   deleteQuestion,
+  deleteUnitFor,
 } from "@/lib/db";
 import { runFreshnessCheck } from "@/lib/freshness";
-import { getActiveCorridor } from "@/lib/corridor";
+import { getActiveCorridor, allCorridors } from "@/lib/corridor";
 import { cookies } from "next/headers";
 import { anthropic, MODEL, textOf, jsonCall } from "@/lib/anthropic";
 import {
   seedDefaults,
+  recoverContent,
   suggestTopics,
   autoOrderSlugs,
   assessCurriculum,
   assessUnitValue,
   type SuggestedTopic,
 } from "@/lib/curriculum";
+
+/** Human label for a corridor (for AI prompts), e.g. "germany" -> "Germany". */
+async function corridorLabel(slug: string): Promise<string> {
+  const c = (await allCorridors()).find((x) => x.slug === slug);
+  return c?.label ?? slug.charAt(0).toUpperCase() + slug.slice(1);
+}
 import type { Corridor, RiskTier } from "@/lib/question-unit";
 
 export type ActionResult = { ok: boolean; message: string };
@@ -65,10 +73,29 @@ const slugify = (s: string) =>
 
 export async function seedCurriculum(): Promise<ActionResult> {
   try {
-    const n = await seedDefaults();
+    const corridor = await getActiveCorridor();
+    const n = await seedDefaults(corridor);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
-    return { ok: true, message: `Seeded ${n} topics from defaults.` };
+    return { ok: true, message: `Seeded ${n} topics for ${await corridorLabel(corridor)}.` };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Rebuild this corridor's curriculum from its generated units (recovers orphaned content). */
+export async function recoverCurriculum(): Promise<ActionResult> {
+  try {
+    const corridor = await getActiveCorridor();
+    const n = await recoverContent(corridor);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return {
+      ok: true,
+      message: n > 0
+        ? `Recovered ${n} topic(s) from existing content. Rename any that need a cleaner label.`
+        : "Nothing to recover. Every unit already has a topic.",
+    };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }
@@ -81,9 +108,11 @@ export async function addTopic(
 ): Promise<ActionResult> {
   if (!t.title.trim() || !t.question.trim()) return { ok: false, message: "Title and question are required." };
   try {
+    const corridor = await getActiveCorridor();
     const slug = `${slugify(t.title)}-${Math.random().toString(36).slice(2, 6)}`;
     await insertTopic({
-      id: slug,
+      id: `${corridor}-${slug}`,
+      corridor,
       stage,
       pillarSlug,
       slug,
@@ -131,7 +160,8 @@ export async function suggest(
   existing: string[],
 ): Promise<{ ok: boolean; message?: string; suggestions: SuggestedTopic[] }> {
   try {
-    const suggestions = await suggestTopics(pillarTitle, service, existing);
+    const label = await corridorLabel(await getActiveCorridor());
+    const suggestions = await suggestTopics(pillarTitle, service, existing, label);
     return { ok: true, suggestions };
   } catch (e) {
     return { ok: false, message: errMsg(e), suggestions: [] };
@@ -153,7 +183,7 @@ export async function reorder(orderedSlugs: string[]): Promise<ActionResult> {
 /** Let AI order a pillar's topics into a logical sequence. */
 export async function autoOrder(pillarSlug: string, pillarTitle: string): Promise<ActionResult> {
   try {
-    const topics = (await listTopics()).filter((t) => t.pillarSlug === pillarSlug);
+    const topics = (await listTopics(await getActiveCorridor())).filter((t) => t.pillarSlug === pillarSlug);
     const ordered = await autoOrderSlugs(pillarTitle, topics.map((t) => ({ slug: t.slug, question: t.question })));
     await reorderTopics(ordered);
     revalidatePath("/admin");
@@ -171,7 +201,8 @@ export async function checkQuality(
   questions: string[],
 ): Promise<{ ok: boolean; text?: string; message?: string }> {
   try {
-    return { ok: true, text: await assessCurriculum(pillarTitle, service, questions) };
+    const label = await corridorLabel(await getActiveCorridor());
+    return { ok: true, text: await assessCurriculum(pillarTitle, service, questions, label) };
   } catch (e) {
     return { ok: false, message: errMsg(e) };
   }
@@ -352,7 +383,7 @@ export async function autopilotStep(): Promise<StepResult> {
 
     // 2) Generate the next topic that has no unit yet (for the active corridor).
     const CORRIDOR = await getActiveCorridor();
-    const topics = await listTopics();
+    const topics = await listTopics(CORRIDOR);
     const statuses = await unitStatusBySlug(CORRIDOR);
     const next = topics.find((t) => !statuses[t.slug] || statuses[t.slug] === "planned");
     if (!next) return { ok: true, done: true, message: "Autopilot complete." };
@@ -521,11 +552,12 @@ export async function removeSource(id: string): Promise<ActionResult> {
  * verification → auto-publish (factual + all agree) or route to the queue.
  */
 export async function generateUnit(topicSlug: string, guidance?: string): Promise<ActionResult> {
-  const topic = (await listTopics()).find((t) => t.slug === topicSlug);
+  const CORRIDOR = await getActiveCorridor();
+  const topic = (await listTopics(CORRIDOR)).find((t) => t.slug === topicSlug);
   if (!topic) return { ok: false, message: "Unknown topic." };
   const pillar = pillarBySlug(topic.pillarSlug);
   if (!pillar) return { ok: false, message: "Unknown pillar." };
-  const CORRIDOR = await getActiveCorridor();
+  const label = await corridorLabel(CORRIDOR);
 
   try {
     const sourceIds = await selectSources(topic.question, CORRIDOR);
@@ -536,6 +568,7 @@ export async function generateUnit(topicSlug: string, guidance?: string): Promis
     const draft = await writeUnit({
       question: topic.question,
       corridor: CORRIDOR,
+      corridorLabel: label,
       pillar: pillar.n as 1 | 2 | 3 | 4 | 5 | 6 | 7,
       riskTier: topic.riskTier,
       spans,
@@ -559,7 +592,7 @@ export async function generateUnit(topicSlug: string, guidance?: string): Promis
       draft.directAnswer,
       draft.keyTakeaways.length ? `## Key takeaways\n\n${draft.keyTakeaways.map((k) => `- ${k}`).join("\n")}` : "",
       ...draft.sections.map((s) => `## ${s.heading}\n\n${s.body}`),
-      draft.corridorDelta ? `## How it differs for a German company\n\n${draft.corridorDelta}` : "",
+      draft.corridorDelta ? `## How it differs for a company from ${label}\n\n${draft.corridorDelta}` : "",
       draft.checklist.length ? `## Checklist\n\n${draft.checklist.map((c) => `- ${c}`).join("\n")}` : "",
     ]
       .filter(Boolean)
@@ -610,7 +643,7 @@ export async function generateUnit(topicSlug: string, guidance?: string): Promis
 
 export async function saveUnitBody(slug: string, body: string): Promise<ActionResult> {
   try {
-    await dbSaveBody(slug, body);
+    await dbSaveBody(await getActiveCorridor(), slug, body);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
     return { ok: true, message: "Saved." };
@@ -809,10 +842,12 @@ export async function rejectUnit(unitId: string): Promise<ActionResult> {
 export async function resetUnitContent(slug: string): Promise<ActionResult> {
   try {
     const corridor = await getActiveCorridor();
-    await deleteUnit(`${corridor}-${slug}`);
+    const removed = await deleteUnitFor(corridor, slug);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
-    return { ok: true, message: "Content cleared. Generate again to start fresh." };
+    return removed > 0
+      ? { ok: true, message: "Content cleared. Generate again to start fresh." }
+      : { ok: false, message: `No content found to clear for ${await corridorLabel(corridor)}.` };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }

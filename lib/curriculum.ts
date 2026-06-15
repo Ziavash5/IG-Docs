@@ -1,6 +1,7 @@
 import {
   journey,
   pillarShells,
+  pillarByNumber,
   defaultTopicRows,
   type Stage,
   type UnitEntry,
@@ -10,6 +11,7 @@ import type { RiskTier } from "./question-unit";
 import {
   listTopics,
   unitStatusBySlug,
+  unitsForCorridor,
   insertTopic,
   topicCount,
   type PublicUnit,
@@ -31,8 +33,8 @@ function toState(status?: string): UnitState {
 
 export async function getCurriculum(corridor: string): Promise<Stage[]> {
   try {
-    const topics = await listTopics();
-    if (topics.length === 0) return journey; // not seeded yet
+    const topics = await listTopics(corridor);
+    if (topics.length === 0) return pillarShells(); // this corridor has no topics yet
     const statuses = await unitStatusBySlug(corridor);
     const shells = pillarShells();
     for (const stage of shells) {
@@ -64,19 +66,52 @@ export async function unitContent(corridor: string, slug: string): Promise<Publi
   }
 }
 
-/** Seed the topics table from the in-code defaults (idempotent). */
-export async function seedDefaults(): Promise<number> {
-  const rows = defaultTopicRows();
+/** Seed one corridor's topics from the in-code defaults (idempotent). */
+export async function seedDefaults(corridor: string): Promise<number> {
+  const rows = defaultTopicRows(corridor);
   for (const r of rows) await insertTopic(r);
   return rows.length;
 }
 
-export async function isSeeded(): Promise<boolean> {
+export async function isSeeded(corridor: string): Promise<boolean> {
   try {
-    return (await topicCount()) > 0;
+    return (await topicCount(corridor)) > 0;
   } catch {
     return false;
   }
+}
+
+/**
+ * Rebuild missing topics for a corridor from its generated units. Units are stored
+ * per-corridor, so if topics were deleted (e.g. by the old shared-curriculum bug) the
+ * content still exists but is no longer listed. This re-creates a topic for every unit
+ * that has lost its topic, restoring the content to the curriculum and public site.
+ * Returns how many topics were recovered.
+ */
+export async function recoverContent(corridor: string): Promise<number> {
+  const [units, topics] = await Promise.all([unitsForCorridor(corridor), listTopics(corridor)]);
+  const have = new Set(topics.map((t) => t.slug));
+  let recovered = 0;
+  for (const u of units) {
+    if (have.has(u.slug)) continue;
+    const p = pillarByNumber(u.pillar);
+    if (!p) continue;
+    // Short nav label from the slug; the operator can Rename it afterwards.
+    const title = u.slug.replace(/^[a-z]{2,}-/, "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 48);
+    await insertTopic({
+      id: `${corridor}-${u.slug}`,
+      corridor,
+      stage: p.stageSlug,
+      pillarSlug: p.pillarSlug,
+      slug: u.slug,
+      title: title || u.slug,
+      question: u.question,
+      riskTier: (u.riskTier === "interpretive" ? "interpretive" : "factual") as RiskTier,
+      position: 100 + recovered,
+    });
+    recovered++;
+  }
+  return recovered;
 }
 
 /** Ask Claude for the most logical reading order; returns ordered slugs. */
@@ -111,22 +146,25 @@ export async function assessCurriculum(
   pillarTitle: string,
   service: string,
   questions: string[],
+  corridorLabel = "Germany",
 ): Promise<string> {
   const msg = await anthropic().messages.create({
     model: MODEL,
     max_tokens: 1500,
     thinking: { type: "adaptive" },
     system:
-      "You are an editor auditing a corridor-specific knowledge hub for German " +
-      "companies entering Canada. Assess this pillar's question set for: coverage gaps " +
+      `You are an editor auditing a corridor-specific knowledge hub for companies from ` +
+      `${corridorLabel} entering Canada. Assess this pillar's question set for: coverage gaps ` +
       "(high-value questions a buyer would ask but are missing), duplicates or overlap, " +
-      "vague or low-value questions, and whether the ordering is logical. Be specific and " +
-      "concise. Plain text, short sections with dashes. No preamble.",
+      "vague or low-value questions, and whether the ordering is logical. Consider what is " +
+      `specific to the ${corridorLabel}-Canada corridor (treaty, social-security agreement, ` +
+      "home-country tax rules, trade agreement). Be specific and concise. Plain text, short " +
+      "sections with dashes. No preamble.",
     messages: [
       {
         role: "user",
         content:
-          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: Germany\n\n` +
+          `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: ${corridorLabel}\n\n` +
           `Current questions:\n${questions.map((q) => `- ${q}`).join("\n")}`,
       },
     ],
@@ -169,11 +207,12 @@ export interface SuggestedTopic {
   riskTier: RiskTier;
 }
 
-/** Ask Claude to propose new question-topics for a pillar in the Germany corridor. */
+/** Ask Claude to propose new question-topics for a pillar in a given corridor. */
 export async function suggestTopics(
   pillarTitle: string,
   service: string,
   existingQuestions: string[],
+  corridorLabel = "Germany",
 ): Promise<SuggestedTopic[]> {
   const parsed = await jsonCall<{ topics: SuggestedTopic[] }>({
     schema: {
@@ -192,12 +231,14 @@ export async function suggestTopics(
       },
     },
     system:
-      "You propose new long-tail questions a German company would ask about this part of " +
-      "setting up or operating in Canada. Each must be specific, answerable from official " +
-      "sources, and not a duplicate of the existing ones. Mark riskTier 'interpretive' for " +
-      "treaty/PE/transfer-pricing/immigration-eligibility matters, otherwise 'factual'.",
+      `You propose new long-tail questions a company from ${corridorLabel} would ask about this ` +
+      "part of setting up or operating in Canada. Each must be specific, answerable from official " +
+      "sources, and not a duplicate of the existing ones. Favour questions that are genuinely " +
+      `specific to the ${corridorLabel}-Canada corridor where relevant (tax treaty, social-security ` +
+      "agreement, home-country tax/CFC rules, trade agreement, immigration routes). Mark riskTier " +
+      "'interpretive' for treaty/PE/transfer-pricing/immigration-eligibility matters, otherwise 'factual'.",
     user:
-      `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: Germany\n\n` +
+      `Pillar: ${pillarTitle} (InterGest service: ${service})\nCorridor: ${corridorLabel}\n\n` +
       `Existing questions:\n${existingQuestions.map((q) => `- ${q}`).join("\n")}\n\nPropose 4 new ones.`,
   });
   return (parsed.topics ?? []).filter((t) => t.question && t.title);
