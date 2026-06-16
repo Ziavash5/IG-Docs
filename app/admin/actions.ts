@@ -36,6 +36,7 @@ import {
   deleteUnit,
   insertCorridor,
   deleteCorridor,
+  setCorridorActive as dbSetCorridorActive,
   setSetting,
   publishQuestionAnswer,
   deleteQuestion,
@@ -1050,10 +1051,24 @@ export async function addCorridor(label: string): Promise<ActionResult> {
   const slug = slugifyId(label);
   if (!slug) return { ok: false, message: "Give the corridor a name." };
   try {
-    await insertCorridor(slug, label.trim());
+    // New corridors start locked ("coming soon"); unlock once their content is ready.
+    await insertCorridor(slug, label.trim(), false);
     revalidatePath("/admin");
     revalidatePath("/", "layout");
-    return { ok: true, message: `Added corridor "${label}". Select it to generate for it.` };
+    return { ok: true, message: `Added "${label}" (locked). Build its content, then Unlock it.` };
+  } catch (e) {
+    return { ok: false, message: `Failed: ${errMsg(e)}` };
+  }
+}
+
+/** Lock or unlock a corridor on the public site. */
+export async function setCorridorLock(slug: string, active: boolean): Promise<ActionResult> {
+  try {
+    const label = (await allCorridors()).find((c) => c.slug === slug)?.label ?? slug;
+    await dbSetCorridorActive(slug, label, active);
+    revalidatePath("/admin");
+    revalidatePath("/", "layout");
+    return { ok: true, message: active ? `${label} is now live.` : `${label} is locked (coming soon).` };
   } catch (e) {
     return { ok: false, message: `Failed: ${errMsg(e)}` };
   }

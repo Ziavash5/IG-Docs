@@ -27,14 +27,16 @@ export async function getActiveCorridor(): Promise<string> {
   return DEFAULT_CORRIDOR;
 }
 
-/** Built-in corridors plus any added in the console. */
+/** Built-in corridors merged with the console: DB rows override active/label, and add new ones. */
 export async function allCorridors(): Promise<CorridorItem[]> {
-  const defaults = DEFAULT_CORRIDORS.map((c) => ({ slug: c.slug, label: c.label, active: c.active }));
+  const map = new Map<string, CorridorItem>();
+  for (const c of DEFAULT_CORRIDORS) map.set(c.slug, { slug: c.slug, label: c.label, active: c.active });
   try {
-    const custom = await listCorridors();
-    const seen = new Set(defaults.map((d) => d.slug));
-    return [...defaults, ...custom.filter((c) => !seen.has(c.slug)).map((c) => ({ ...c, active: true }))];
+    for (const c of await listCorridors()) {
+      map.set(c.slug, { slug: c.slug, label: c.label, active: c.active });
+    }
   } catch {
-    return defaults;
+    /* DB unavailable — built-in defaults only */
   }
+  return [...map.values()];
 }

@@ -7,6 +7,7 @@ import {
   assessUnit, generateUnit, addSource, addPdfSource, ingestAllStep, autopilotStep,
   discoverSources, checkSourceFreshness, setCorridor, addCorridor, saveCta,
   draftAnswer, publishQuestion, dismissQuestion, addLanguage, removeLanguage, syncLanguage, translateAllStep,
+  setCorridorLock,
 } from "./actions";
 
 type QItem = { id: string; corridor: string; unitSlug: string; question: string; email: string | null };
@@ -78,6 +79,7 @@ export function CorridorBar({ corridors, active }: { corridors: CorridorItem[]; 
   const [label, setLabel] = useState("");
   const [msg, setMsg] = useState("");
   const router = useRouter();
+  const activeCorridor = corridors.find((c) => c.slug === active);
 
   return (
     <div className="corridor-callout" style={{ borderLeftColor: "var(--color-ink)" }}>
@@ -89,11 +91,22 @@ export function CorridorBar({ corridors, active }: { corridors: CorridorItem[]; 
       <div className="assist-bar">
         <select className="corridor-select" style={{ width: "auto", minWidth: 180 }} value={active} disabled={pending}
           onChange={(e) => start(async () => { await setCorridor(e.target.value); router.refresh(); })}>
-          {corridors.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+          {corridors.map((c) => <option key={c.slug} value={c.slug}>{c.label}{c.active ? "" : " (locked)"}</option>)}
         </select>
+        {activeCorridor && (
+          <button className="ghost-btn" disabled={pending}
+            onClick={() => start(async () => { const r = await setCorridorLock(active, !activeCorridor.active); setMsg(r.message); router.refresh(); })}>
+            {activeCorridor.active ? "Lock (coming soon)" : "Unlock (go live)"}
+          </button>
+        )}
         <button className="ghost-btn" onClick={() => setAdding((v) => !v)}>{adding ? "Close" : "Add corridor"}</button>
         {msg && <span className="action-msg ok">{msg}</span>}
       </div>
+      {activeCorridor && (
+        <p style={{ color: "var(--color-faint)", fontSize: 13, margin: "8px 0 0" }}>
+          {activeCorridor.label} is currently <strong>{activeCorridor.active ? "live" : "locked (coming soon)"}</strong> on the public site.
+        </p>
+      )}
       {adding && (
         <div className="assist-bar" style={{ marginTop: 10 }}>
           <input className="assist-input" placeholder="Corridor name (e.g. Austria, United Kingdom)" value={label} onChange={(e) => setLabel(e.target.value)} />

@@ -256,16 +256,23 @@ export async function setSetting(key: string, value: string): Promise<void> {
 
 // ---- Corridors --------------------------------------------------------------
 
-export async function listCorridors(): Promise<{ slug: string; label: string }[]> {
+export async function listCorridors(): Promise<{ slug: string; label: string; active: boolean }[]> {
   const db = sql();
-  const rows = await db`select slug, label from corridors order by created_at`;
-  return rows.map((r) => ({ slug: r.slug as string, label: r.label as string }));
+  const rows = await db`select slug, label, active from corridors order by created_at`;
+  return rows.map((r) => ({ slug: r.slug as string, label: r.label as string, active: r.active as boolean }));
 }
 
-export async function insertCorridor(slug: string, label: string): Promise<void> {
+export async function insertCorridor(slug: string, label: string, active = true): Promise<void> {
   const db = sql();
-  await db`insert into corridors (slug, label) values (${slug}, ${label})
+  await db`insert into corridors (slug, label, active) values (${slug}, ${label}, ${active})
            on conflict (slug) do update set label = excluded.label`;
+}
+
+/** Lock/unlock a corridor (upserts so built-in corridors can be overridden too). */
+export async function setCorridorActive(slug: string, label: string, active: boolean): Promise<void> {
+  const db = sql();
+  await db`insert into corridors (slug, label, active) values (${slug}, ${label}, ${active})
+           on conflict (slug) do update set active = excluded.active, label = excluded.label`;
 }
 
 export async function deleteCorridor(slug: string): Promise<void> {
